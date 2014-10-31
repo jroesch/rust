@@ -52,7 +52,7 @@ use ast::{Delimiter, TokenTree, TraitItem, TraitRef, TtDelimited, TtSequence, Tt
 use ast::{TtNonterminal, TupleVariantKind, Ty, Ty_, TyBot};
 use ast::{TypeField, TyFixedLengthVec, TyClosure, TyProc, TyBareFn};
 use ast::{TyTypeof, TyInfer, TypeMethod};
-use ast::{TyNil, TyParam, TyParamBound, TyParen, TyPath, TyPtr, TyQPath};
+use ast::{TyNil, TyParam, TyParamBound, TyKind, TyParen, TyPath, TyPtr, TyQPath};
 use ast::{TyRptr, TyTup, TyU32, TyUnboxedFn, TyUniq, TyVec, UnUniq};
 use ast::{TypeImplItem, TypeTraitItem, Typedef, UnboxedClosureKind};
 use ast::{UnboxedFnBound, UnboxedFnTy, UnboxedFnTyParamBound};
@@ -3910,7 +3910,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    /// Matches typaram = (unbound`?`)? IDENT optbounds ( EQ ty )?
+    /// Matches typaram = (unbound`?`)? IDENT optkind optbounds ( EQ ty )?
     fn parse_ty_param(&mut self) -> TyParam {
         // This is a bit hacky. Currently we are only interested in a single
         // unbound, and it may only be `Sized`. To avoid backtracking and other
@@ -3927,6 +3927,8 @@ impl<'a> Parser<'a> {
             ident = self.parse_ident();
         }
 
+        let kind = self.parse_ty_kind();
+
         let bounds = self.parse_colon_then_ty_param_bounds();
 
         let default = if self.token == token::EQ {
@@ -3942,9 +3944,22 @@ impl<'a> Parser<'a> {
             unbound: unbound,
             default: default,
             span: span,
+            kind: kind
         }
     }
 
+    fn parse_ty_kind(&mut self) -> ast::TyKind {
+      if self.eat(&token::LT) {
+        println!("Inside parse_ty_kind!")
+        let placeholders = self.parse_seq_to_gt(Some(token::COMMA), |p| {
+          p.eat(&token::UNDERSCORE)
+        });
+        placeholders
+          .iter()
+          .skip(1)
+          .fold(ast::Star, |accum, _| ast::Arrow(box ast::Star, box accum))
+      } else { ast::Star }
+    }
     /// Parse a set of optional generic type parameter declarations. Where
     /// clauses are not parsed here, and must be added later via
     /// `parse_where_clause()`.
@@ -5891,4 +5906,3 @@ impl<'a> Parser<'a> {
         }
     }
 }
-
