@@ -203,34 +203,11 @@ pub fn write_region(ecx: &EncodeContext,
     tyencode::enc_region(rbml_w.writer, ty_str_ctxt, r);
 }
 
-fn encode_bounds(rbml_w: &mut Encoder,
-                 ecx: &EncodeContext,
-                 bounds: &ty::ParamBounds,
-                 tag: uint) {
-    rbml_w.start_tag(tag);
-
-    let ty_str_ctxt = &tyencode::ctxt { diag: ecx.diag,
-                                        ds: def_to_string,
-                                        tcx: ecx.tcx,
-                                        abbrevs: &ecx.type_abbrevs };
-    tyencode::enc_bounds(rbml_w.writer, ty_str_ctxt, bounds);
-
-    rbml_w.end_tag();
-}
-
 fn encode_type(ecx: &EncodeContext,
                rbml_w: &mut Encoder,
                typ: ty::t) {
     rbml_w.start_tag(tag_items_data_item_type);
     write_type(ecx, rbml_w, typ);
-    rbml_w.end_tag();
-}
-
-fn encode_region(ecx: &EncodeContext,
-                 rbml_w: &mut Encoder,
-                 r: ty::Region) {
-    rbml_w.start_tag(tag_items_data_region);
-    write_region(ecx, rbml_w, r);
     rbml_w.end_tag();
 }
 
@@ -792,6 +769,7 @@ fn encode_generics(rbml_w: &mut Encoder,
         tcx: ecx.tcx,
         abbrevs: &ecx.type_abbrevs
     };
+
     for param in generics.types.iter() {
         rbml_w.start_tag(tag_type_param_def);
         tyencode::enc_type_param_def(rbml_w.writer, ty_str_ctxt, param);
@@ -815,11 +793,12 @@ fn encode_generics(rbml_w: &mut Encoder,
         rbml_w.wr_tagged_u64(tag_region_param_def_index,
                              param.index as u64);
 
-        for &bound_region in param.bounds.iter() {
-            encode_region(ecx, rbml_w, bound_region);
-        }
-
         rbml_w.end_tag();
+    }
+
+    // Predicates, JARED: do I need to do anything else here?
+    for predicate in generics.predicates.iter() {
+        tyencode::enc_predicate(rbml_w.writer, ty_str_ctxt, predicate)
     }
 
     rbml_w.end_tag();
@@ -1361,8 +1340,6 @@ fn encode_info_for_item(ecx: &EncodeContext,
             rbml_w.end_tag();
         }
         encode_path(rbml_w, path.clone());
-
-        encode_bounds(rbml_w, ecx, &trait_def.bounds, tag_trait_def_bounds);
 
         // Encode the implementations of this trait.
         encode_extension_implementations(ecx, rbml_w, def_id);

@@ -608,10 +608,9 @@ impl Repr for def::Def {
 }
 
 impl Repr for ty::TypeParameterDef {
-    fn repr(&self, tcx: &ctxt) -> String {
-        format!("TypeParameterDef({}, {}, {}/{})",
+    fn repr(&self, _: &ctxt) -> String {
+        format!("TypeParameterDef({}, {}/{})",
                 self.def_id,
-                self.bounds.repr(tcx),
                 self.space,
                 self.index)
     }
@@ -619,10 +618,9 @@ impl Repr for ty::TypeParameterDef {
 
 impl Repr for ty::RegionParameterDef {
     fn repr(&self, tcx: &ctxt) -> String {
-        format!("RegionParameterDef(name={}, def_id={}, bounds={})",
+        format!("RegionParameterDef(name={}, def_id={})",
                 token::get_name(self.name),
-                self.def_id.repr(tcx),
-                self.bounds.repr(tcx))
+                self.def_id.repr(tcx))
     }
 }
 
@@ -714,9 +712,8 @@ impl Repr for ty::TraitRef {
 
 impl Repr for ty::TraitDef {
     fn repr(&self, tcx: &ctxt) -> String {
-        format!("TraitDef(generics={}, bounds={}, trait_ref={})",
+        format!("TraitDef(generics={}, trait_ref={})",
                 self.generics.repr(tcx),
-                self.bounds.repr(tcx),
                 self.trait_ref.repr(tcx))
     }
 }
@@ -1241,4 +1238,3 @@ impl<A:Repr,B:Repr> Repr for (A,B) {
         format!("({},{})", a.repr(tcx), b.repr(tcx))
     }
 }
-

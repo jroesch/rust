@@ -105,7 +105,7 @@ impl<'a, 'v> Visitor<'v> for LifetimeContext<'a> {
                     f(EarlyScope(subst::TypeSpace,
                                  &generics.lifetimes,
                                  scope))
-                }, |v| v.check_lifetime_defs(&generics.lifetimes));
+                }, |v| { v.check_lifetime_defs(&generics.lifetimes) });
                 &generics.lifetimes
             }
             ast::ItemImpl(ref generics, _, _, _) => {
@@ -113,7 +113,7 @@ impl<'a, 'v> Visitor<'v> for LifetimeContext<'a> {
                     f(EarlyScope(subst::TypeSpace,
                                  &generics.lifetimes,
                                  scope))
-                }, |v| v.check_lifetime_defs(&generics.lifetimes));
+                }, |v| { v.check_lifetime_defs(&generics.lifetimes)});
                 &generics.lifetimes
             }
         };
@@ -164,6 +164,13 @@ impl<'a, 'v> Visitor<'v> for LifetimeContext<'a> {
         debug!("popping block scope {}", b.id);
     }
 
+    fn visit_lifetime_decl(&mut self, lifetime: &'v ast::LifetimeDef) {
+        self.visit_lifetime_ref(&lifetime.lifetime);
+        for bound in lifetime.bounds.iter() {
+            self.visit_lifetime_ref(bound)
+        }
+    }
+
     fn visit_lifetime_ref(&mut self, lifetime_ref: &ast::Lifetime) {
         if lifetime_ref.name == special_idents::static_lifetime.name {
             self.insert_lifetime(lifetime_ref, DefStaticRegion);
@@ -172,17 +179,17 @@ impl<'a, 'v> Visitor<'v> for LifetimeContext<'a> {
         self.resolve_lifetime_ref(lifetime_ref);
     }
 
-    fn visit_generics(&mut self, generics: &ast::Generics) {
-        for ty_param in generics.ty_params.iter() {
-            self.visit_ty_param_bounds(&ty_param.bounds);
-            match ty_param.default {
-                Some(ref ty) => self.visit_ty(&**ty),
-                None => {}
+    fn visit_ty_param_bound(&mut self, bound: &ast::TyParamBound) {
+        match *bound {
+            ast::TraitTyParamBound(ref trait_ref) => {
+                self.visit_trait_ref(trait_ref);
             }
-        }
-        for predicate in generics.where_clause.predicates.iter() {
-            self.visit_ident(predicate.span, predicate.ident);
-            self.visit_ty_param_bounds(&predicate.bounds);
+            ast::UnboxedFnTyParamBound(ref fn_decl) => {
+                self.visit_unboxed_fn_ty_param_bound(&**fn_decl);
+            }
+            ast::RegionTyParamBound(ref lifetime) => {
+                self.visit_lifetime_ref(lifetime);
+            }
         }
     }
 }
@@ -197,21 +204,7 @@ impl<'a> LifetimeContext<'a> {
         }))
     }
 
-    fn visit_ty_param_bounds(&mut self,
-                             bounds: &OwnedSlice<ast::TyParamBound>) {
-        for bound in bounds.iter() {
-            match *bound {
-                ast::TraitTyParamBound(ref trait_ref) => {
-                    self.visit_trait_ref(trait_ref);
-                }
-                ast::UnboxedFnTyParamBound(ref fn_decl) => {
-                    self.visit_unboxed_fn_ty_param_bound(&**fn_decl);
-                }
-                ast::RegionTyParamBound(ref lifetime) => {
-                    self.visit_lifetime_ref(lifetime);
-                }
-            }
-        }
+    fn visit_ty_param_bounds(&mut self, bounds: &OwnedSlice<ast::TyParamBound>) {
     }
 
     fn visit_trait_ref(&mut self, trait_ref: &ast::TraitRef) {
@@ -293,6 +286,7 @@ impl<'a> LifetimeContext<'a> {
     }
 
     fn resolve_lifetime_ref(&mut self, lifetime_ref: &ast::Lifetime) {
+        info!("in resolve lifetime ref");
         // Walk up the scope chain, tracking the number of fn scopes
         // that we pass through, until we find a lifetime with the
         // given name or we run out of scopes. If we encounter a code
@@ -462,6 +456,7 @@ fn search_lifetimes(lifetimes: &Vec<ast::LifetimeDef>,
 ///////////////////////////////////////////////////////////////////////////
 
 pub fn early_bound_lifetimes<'a>(generics: &'a ast::Generics) -> Vec<ast::LifetimeDef> {
+    info!("in early bound life")
     let referenced_idents = early_bound_lifetime_names(generics);
     if referenced_idents.is_empty() {
         return Vec::new();
@@ -479,7 +474,7 @@ fn early_bound_lifetime_names(generics: &ast::Generics) -> Vec<ast::Name> {
      * containing all early bound lifetime names for those
      * generics. (In fact, this list may also contain other names.)
      */
-
+     info!("in early bound lifetime names")
     // Create two lists, dividing the lifetimes into early/late bound.
     // Initially, all of them are considered late, but we will move
     // things from late into early as we go if we find references to
@@ -498,7 +493,7 @@ fn early_bound_lifetime_names(generics: &ast::Generics) -> Vec<ast::Name> {
             visit::walk_ty_param_bounds(&mut collector, &ty_param.bounds);
         }
         for predicate in generics.where_clause.predicates.iter() {
-            visit::walk_ty_param_bounds(&mut collector, &predicate.bounds);
+            collector.visit_predicate(predicate);
         }
     }
 
@@ -514,6 +509,7 @@ fn early_bound_lifetime_names(generics: &ast::Generics) -> Vec<ast::Name> {
             }
         }
     }
+    info!("{}", early_bound)
     return early_bound;
 
     struct FreeLifetimeCollector<'a> {

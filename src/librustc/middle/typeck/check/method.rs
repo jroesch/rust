@@ -381,7 +381,7 @@ struct Candidate {
 // we'll construct a normal candidate from that. There is no deep
 // reason for this, the code just worked out a bit cleaner.
 struct ExtensionCandidate {
-    obligation: traits::Obligation,
+    obligation: traits::TraitObligation,
     xform_self_ty: ty::t,
     method_ty: Rc<ty::Method>,
     method_num: uint,
@@ -594,8 +594,9 @@ impl<'a, 'tcx> LookupContext<'a, 'tcx> {
         // Construct the obligation which must match.
         let trait_ref =
             Rc::new(ty::TraitRef::new(trait_def_id, substs));
+        // Might not be right ObligationCause
         let obligation =
-            traits::Obligation::misc(self.span, trait_ref);
+            traits::Obligation::misc(self.fcx.body_id, self.span, trait_ref);
 
         debug!("extension-candidate(xform_self_ty={} obligation={})",
                self.infcx().ty_to_string(xform_self_ty),
@@ -688,13 +689,16 @@ impl<'a, 'tcx> LookupContext<'a, 'tcx> {
 
     fn push_inherent_candidates_from_bounds(&mut self,
                                             _self_ty: ty::t,
-                                            space: subst::ParamSpace,
-                                            index: uint,
+                                            _: subst::ParamSpace,
+                                            _: uint,
                                             restrict_to: Option<DefId>) {
-        let bounds =
-            self.fcx.inh.param_env.bounds.get(space, index).trait_bounds
-            .as_slice();
-        self.push_inherent_candidates_from_bounds_inner(bounds,
+        let bounds: Vec<_> =
+            self.fcx.inh.param_env.caller_obligations.iter().filter_map(|predicate|
+                match predicate {
+                    &ty::TraitPredicate(ref trait_ref) => Some(trait_ref.clone()),
+                    _ => None
+                }).collect();
+        self.push_inherent_candidates_from_bounds_inner(bounds.as_slice(),
             |this, trait_ref, m, method_num| {
                 match restrict_to {
                     Some(trait_did) => {
@@ -746,7 +750,10 @@ impl<'a, 'tcx> LookupContext<'a, 'tcx> {
     {
         let tcx = self.tcx();
         let mut cache = HashSet::new();
-        for bound_trait_ref in traits::transitive_bounds(tcx, bounds) {
+        for bound_trait_ref in
+            traits::elaborate_trait_refs(tcx, bounds)
+            .flat_map(|p| p.trait_predicate().into_iter())
+        {
             // Already visited this trait, skip it.
             if !cache.insert(bound_trait_ref.def_id) {
                 continue;
@@ -1289,9 +1296,9 @@ impl<'a, 'tcx> LookupContext<'a, 'tcx> {
         // (trait-based method dispatch).
         let candidate = Candidate {
             xform_self_ty: extension.xform_self_ty,
-            rcvr_substs: extension.obligation.trait_ref.substs.clone(),
+            rcvr_substs: extension.obligation.trait_ref().substs.clone(),
             method_ty: extension.method_ty.clone(),
-            origin: MethodTypeParam(MethodParam{trait_ref: extension.obligation.trait_ref.clone(),
+            origin: MethodTypeParam(MethodParam{trait_ref: extension.obligation.trait_ref().clone(),
                                                 method_num: extension.method_num})
         };
 
@@ -1337,6 +1344,7 @@ impl<'a, 'tcx> LookupContext<'a, 'tcx> {
                candidate.repr(self.tcx()));
 
         let mut rcvr_substs = candidate.rcvr_substs.clone();
+        self.enforce_drop_trait_limitations(candidate);
 
         if !self.enforce_object_limitations(candidate) {
             // Here we change `Self` from `Trait` to `err` in the case that
@@ -1437,14 +1445,14 @@ impl<'a, 'tcx> LookupContext<'a, 'tcx> {
             MethodTraitObject(..) => {
                 let mut temp_substs = all_substs.clone();
                 temp_substs.types.get_mut_slice(SelfSpace)[0] = ty::mk_err();
-                self.fcx.add_obligations_for_parameters(
-                    traits::ObligationCause::misc(self.span),
+        self.fcx.add_obligations_for_parameters(
+            traits::ObligationCause::misc(self.fcx.body_id, self.span),
                     &temp_substs,
                     &candidate.method_ty.generics);
             }
             _ => {
                 self.fcx.add_obligations_for_parameters(
-                    traits::ObligationCause::misc(self.span),
+                    traits::ObligationCause::misc(self.fcx.body_id, self.span),
                     &all_substs,
                     &candidate.method_ty.generics);
             }
@@ -1779,6 +1787,6 @@ impl Candidate {
 
 impl ExtensionCandidate {
     fn to_source(&self) -> CandidateSource {
-        TraitSource(self.obligation.trait_ref.def_id)
+        TraitSource(self.obligation.trait_ref().def_id)
     }
 }

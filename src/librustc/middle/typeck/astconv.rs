@@ -56,6 +56,7 @@ use middle::lang_items::{FnOnceTraitLangItem};
 use middle::resolve_lifetime as rl;
 use middle::subst::{FnSpace, TypeSpace, SelfSpace, Subst, Substs};
 use middle::subst::{VecPerParamSpace};
+use middle::traits;
 use middle::ty;
 use middle::typeck::lookup_def_tcx;
 use middle::typeck::infer;
@@ -66,8 +67,10 @@ use middle::typeck;
 use util::ppaux::{Repr, UserString};
 
 use std::collections::HashMap;
+use std::collections::EnumSet;
 use std::rc::Rc;
 use std::iter::AdditiveIterator;
+use std::iter::Extendable;
 use syntax::{abi, ast, ast_util};
 use syntax::codemap::Span;
 use syntax::parse::token;
@@ -1348,8 +1351,7 @@ pub fn conv_existential_bounds<'tcx, AC: AstConv<'tcx>, RS:RegionScope>(
     let ast_bound_refs: Vec<&ast::TyParamBound> =
         ast_bounds.iter().collect();
 
-    let PartitionedBounds { builtin_bounds,
-                            trait_bounds,
+    let PartitionedBounds { trait_bounds,
                             region_bounds,
                             unboxed_fn_ty_bounds } =
         partition_bounds(this.tcx(), span, ast_bound_refs.as_slice());
@@ -1369,32 +1371,16 @@ pub fn conv_existential_bounds<'tcx, AC: AstConv<'tcx>, RS:RegionScope>(
                      as closure or object bounds").as_slice());
     }
 
-    // The "main trait refs", rather annoyingly, have no type
-    // specified for the `Self` parameter of the trait. The reason for
-    // this is that they are, after all, *existential* types, and
-    // hence that type is unknown. However, leaving this type missing
-    // causes the substitution code to go all awry when walking the
-    // bounds, so here we clone those trait refs and insert ty::err as
-    // the self type. Perhaps we should do this more generally, it'd
-    // be convenient (or perhaps something else, i.e., ty::erased).
-    let main_trait_refs: Vec<Rc<ty::TraitRef>> =
-        main_trait_refs.iter()
-        .map(|t|
-             Rc::new(ty::TraitRef {
-                 def_id: t.def_id,
-                 substs: t.substs.with_self_ty(ty::mk_err()) }))
-        .collect();
-
     let region_bound = compute_region_bound(this,
                                             rscope,
                                             span,
-                                            builtin_bounds,
+                                            EnumSet::empty(),
                                             region_bounds.as_slice(),
                                             main_trait_refs.as_slice());
-
+    // TODO: jroesch May need more trait checking here.
     ty::ExistentialBounds {
         region_bound: region_bound,
-        builtin_bounds: builtin_bounds,
+        builtin_bounds: EnumSet::empty() //FIXME: Jared this needs to change fail!("NYI"),
     }
 }
 
@@ -1406,13 +1392,12 @@ pub fn compute_opt_region_bound(tcx: &ty::ctxt,
                                 -> Option<ty::Region>
 {
     /*!
-     * Given the bounds on a type parameter / existential type,
-     * determines what single region bound (if any) we can use to
-     * summarize this type. The basic idea is that we will use the
-     * bound the user provided, if they provided one, and otherwise
-     * search the supertypes of trait bounds for region bounds. It may
-     * be that we can derive no bound at all, in which case we return
-     * `None`.
+     * Given the bounds on an object type, determines what single
+     * region bound (if any) we can use to summarize this type. The
+     * basic idea is that we will use the bound the user provided, if
+     * they provided one, and otherwise search the supertypes of trait
+     * bounds for region bounds. It may be that we can derive no bound
+     * at all, in which case we return `None`.
      */
 
     if region_bounds.len() > 1 {
@@ -1430,11 +1415,13 @@ pub fn compute_opt_region_bound(tcx: &ty::ctxt,
     // No explicit region bound specified. Therefore, examine trait
     // bounds and see if we can derive region bounds from those.
     let derived_region_bounds =
-        ty::required_region_bounds(
-            tcx,
-            [],
-            builtin_bounds,
-            trait_bounds);
+        derived_region_bounds(tcx,
+                              span,
+                              // what to pass here? why have a param if
+                              // just shadow it immediately
+                              //ty::mk_infer(tcx, ty::SkolemizedTy(0)),
+                              builtin_bounds,
+                              trait_bounds);
 
     // If there are no derived region bounds, then report back that we
     // can find no region bound.
@@ -1459,6 +1446,61 @@ pub fn compute_opt_region_bound(tcx: &ty::ctxt,
                      explicit lifetime bound required").as_slice());
     }
     return Some(r);
+
+    fn derived_region_bounds(
+        tcx: &ty::ctxt,
+        _: Span,
+        builtin_bounds: ty::BuiltinBounds,
+        trait_bounds: &[Rc<ty::TraitRef>])
+        -> Vec<ty::Region>
+    {
+        // The "trait bounds" in an object type, rather annoyingly, have
+        // no type specified for the `Self` parameter of the trait. The
+        // reason for this is that they are, after all, *existential*
+        // types, and hence that type is unknown. However, leaving this
+        // type missing causes the substitution code to go all awry when
+        // walking the bounds, so here we clone those trait refs and
+        // insert a skolemied type as the self type. Perhaps we should do
+        // this more generally, it'd be convenient (or perhaps something
+        // else, i.e., ty::erased).
+        let erased_self_ty = ty::mk_infer(tcx, ty::SkolemizedTy(0));
+
+        // Create a list of predicates for this erased type.
+        let builtin_predicates =
+            builtin_bounds.iter()
+            .flat_map(
+                |bound| traits::trait_ref_for_builtin_bound(tcx, bound, erased_self_ty).into_iter());
+        let trait_predicates =
+            trait_bounds.iter()
+            .map(|trait_bound| {
+                Rc::new(ty::TraitRef { def_id: trait_bound.def_id,
+                                       substs: trait_bound.substs.with_self_ty(erased_self_ty) })
+            })
+            .map(|trait_bound| {
+                ty::TraitPredicate(trait_bound)
+            });
+
+        let mut predicates: Vec<ty::Predicate> = builtin_predicates.map(|tr| ty::TraitPredicate(tr)).collect();
+        predicates.extend(trait_predicates);
+
+        // Elaborate these predicates and search for anything that
+        // gives us a bound on the erased self type:
+        let mut all_bounds = Vec::new();
+        for predicate in traits::elaborate_predicates(tcx, predicates) {
+            match predicate {
+                ty::TraitPredicate(..) |
+                ty::OutlivesPredicate(ty::RegionOutlivesPredicate(..)) => {
+                }
+                ty::OutlivesPredicate(ty::TypeOutlivesPredicate(t, r)) => {
+                    if t == erased_self_ty {
+                        all_bounds.push(r);
+                    }
+                }
+            }
+        }
+
+        return all_bounds;
+    }
 }
 
 fn compute_region_bound<'tcx, AC: AstConv<'tcx>, RS:RegionScope>(
@@ -1477,8 +1519,8 @@ fn compute_region_bound<'tcx, AC: AstConv<'tcx>, RS:RegionScope>(
      * and we are in an `rscope` that does not provide a default.
      */
 
-    match compute_opt_region_bound(this.tcx(), span, builtin_bounds,
-                                   region_bounds, trait_bounds) {
+    match compute_opt_region_bound(this.tcx(), span, builtin_bounds, region_bounds,
+                                   trait_bounds) {
         Some(r) => r,
         None => {
             match rscope.default_region_bound(span) {
@@ -1495,7 +1537,6 @@ fn compute_region_bound<'tcx, AC: AstConv<'tcx>, RS:RegionScope>(
 }
 
 pub struct PartitionedBounds<'a> {
-    pub builtin_bounds: ty::BuiltinBounds,
     pub trait_bounds: Vec<&'a ast::TraitRef>,
     pub unboxed_fn_ty_bounds: Vec<&'a ast::UnboxedFnBound>,
     pub region_bounds: Vec<&'a ast::Lifetime>,
@@ -1512,7 +1553,6 @@ pub fn partition_bounds<'a>(tcx: &ty::ctxt,
      * and region bounds.
      */
 
-    let mut builtin_bounds = ty::empty_builtin_bounds();
     let mut region_bounds = Vec::new();
     let mut trait_bounds = Vec::new();
     let mut unboxed_fn_ty_bounds = Vec::new();
@@ -1543,19 +1583,13 @@ pub fn partition_bounds<'a>(tcx: &ty::ctxt,
                         }
 
                         trait_def_ids.insert(trait_did, b.path.span);
-
-                        if ty::try_add_builtin_trait(tcx,
-                                                     trait_did,
-                                                     &mut builtin_bounds) {
-                            continue; // success
-                        }
+                        trait_bounds.push(b);
                     }
                     _ => {
                         // Not a trait? that's an error, but it'll get
                         // reported later.
                     }
                 }
-                trait_bounds.push(b);
             }
             ast::RegionTyParamBound(ref l) => {
                 region_bounds.push(l);
@@ -1567,10 +1601,8 @@ pub fn partition_bounds<'a>(tcx: &ty::ctxt,
     }
 
     PartitionedBounds {
-        builtin_bounds: builtin_bounds,
         trait_bounds: trait_bounds,
         region_bounds: region_bounds,
         unboxed_fn_ty_bounds: unboxed_fn_ty_bounds
     }
 }
-
