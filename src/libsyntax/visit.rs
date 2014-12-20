@@ -594,7 +594,7 @@ pub fn walk_generics<'v, V: Visitor<'v>>(visitor: &mut V, generics: &'v Generics
                                                                             ..}) => {
                 visitor.visit_lifetime_ref(lifetime);
 
-                for bound in bounds.iter() { 
+                for bound in bounds.iter() {
                     visitor.visit_lifetime_ref(bound);
                 }
             }

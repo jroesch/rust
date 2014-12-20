@@ -2451,10 +2451,10 @@ impl<'a> State<'a> {
 
                     for (i, bound) in bounds.iter().enumerate() {
                         try!(self.print_lifetime(bound));
-                        
+
                         if i != 0 {
                             try!(word(&mut self.s, ":"));
-                        } 
+                        }
                     }
                 }
                 &ast::WherePredicate::EqPredicate(ast::WhereEqPredicate{ref path, ref ty, ..}) => {

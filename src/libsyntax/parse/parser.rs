@@ -4209,7 +4209,7 @@ impl<'a> Parser<'a> {
                         ast::WhereRegionPredicate {
                             span: span,
                             lifetime: bounded_lifetime,
-                            bounds: bounds 
+                            bounds: bounds
                         }
                     ));
 
