@@ -77,6 +77,14 @@ impl<'ccx, 'tcx> CheckTypeWellFormedVisitor<'ccx, 'tcx> {
                     enum_variants(fcx, enum_def)
                 });
             }
+            ast::ItemTrait(..) => {
+                let trait_def =
+                    ty::lookup_trait_def(ccx.tcx, local_def(item.id));
+                reject_non_type_param_bounds(
+                    ccx.tcx,
+                    item.span,
+                    &trait_def.generics);
+            }
             _ => {}
         }
     }
@@ -86,13 +94,14 @@ impl<'ccx, 'tcx> CheckTypeWellFormedVisitor<'ccx, 'tcx> {
     {
         let ccx = self.ccx;
         let item_def_id = local_def(item.id);
-        let polytype = ty::lookup_item_type(ccx.tcx, item_def_id);
+        let type_scheme = ty::lookup_item_type(ccx.tcx, item_def_id);
+        reject_non_type_param_bounds(ccx.tcx, item.span, &type_scheme.generics);
         let param_env =
             ty::construct_parameter_environment(ccx.tcx,
-                                                &polytype.generics,
+                                                &type_scheme.generics,
                                                 item.id);
         let inh = Inherited::new(ccx.tcx, param_env);
-        let fcx = blank_fn_ctxt(ccx, &inh, ty::FnConverging(polytype.ty), item.id);
+        let fcx = blank_fn_ctxt(ccx, &inh, ty::FnConverging(type_scheme.ty), item.id);
         f(self, &fcx);
         vtable::select_all_fcx_obligations_or_error(&fcx);
         regionck::regionck_item(&fcx, item);
@@ -143,10 +152,12 @@ impl<'ccx, 'tcx> CheckTypeWellFormedVisitor<'ccx, 'tcx> {
                                                         item.span,
                                                         region::CodeExtent::from_node_id(item.id),
                                                         Some(&mut this.cache));
+
             let type_scheme = ty::lookup_item_type(fcx.tcx(), local_def(item.id));
             let item_ty = fcx.instantiate_type_scheme(item.span,
                                                       &fcx.inh.param_env.free_substs,
                                                       &type_scheme.ty);
+
             bounds_checker.check_traits_in_ty(item_ty);
         });
     }
@@ -178,6 +189,7 @@ impl<'ccx, 'tcx> CheckTypeWellFormedVisitor<'ccx, 'tcx> {
                 None => { return; }
                 Some(t) => { t }
             };
+
             let trait_ref = fcx.instantiate_type_scheme(item.span,
                                                         &fcx.inh.param_env.free_substs,
                                                         &trait_ref);
@@ -229,10 +241,63 @@ impl<'ccx, 'tcx> CheckTypeWellFormedVisitor<'ccx, 'tcx> {
     }
 }
 
+// Reject any predicates that do not involve a type parameter.
+fn reject_non_type_param_bounds<'tcx>(tcx: &ty::ctxt<'tcx>,
+                                      span: Span,
+                                      generics: &ty::Generics<'tcx>) {
+
+    for predicate in generics.predicates.iter() {
+        let ty = match predicate {
+            &ty::Predicate::Trait(ty::Binder(ref tr)) => Some(tr.self_ty()),
+            &ty::Predicate::TypeOutlives(ty::Binder(ty::OutlivesPredicate(ty, _))) => Some(ty),
+            _ => None
+        };
+
+        match ty {
+            None => {}
+            Some(ty) => {
+                if !ty.walk().any(|t| is_ty_param(t)) {
+                    tcx.sess.span_err(
+                    span,
+                    format!("cannot bound type `{}`, where clause \
+                        bounds may only be attached to types involving \
+                        type parameters",
+                        ty.repr(tcx)).as_slice())
+                }
+            }
+        }
+    }
+
+    fn is_ty_param(ty: ty::Ty) -> bool {
+        match &ty.sty {
+            &ty::sty::ty_param(_) => true,
+            _ => false
+        }
+    }
+}
+
 impl<'ccx, 'tcx, 'v> Visitor<'v> for CheckTypeWellFormedVisitor<'ccx, 'tcx> {
     fn visit_item(&mut self, i: &ast::Item) {
         self.check_item_well_formed(i);
         visit::walk_item(self, i);
+    }
+
+    fn visit_trait_item(&mut self, t: &'v ast::TraitItem) {
+        match t {
+            &ast::TraitItem::ProvidedMethod(_) |
+            &ast::TraitItem::TypeTraitItem(_) => {},
+            &ast::TraitItem::RequiredMethod(ref method) => {
+                match ty::impl_or_trait_item(self.ccx.tcx, local_def(method.id)) {
+                    ty::ImplOrTraitItem::MethodTraitItem(ty_method) => {
+                        reject_non_type_param_bounds(
+                            self.ccx.tcx,
+                            method.span,
+                            &ty_method.generics)
+                    }
+                    _ => {}
+                }
+            }
+        }
     }
 }
 
