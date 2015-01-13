@@ -318,12 +318,13 @@ impl<'a, 'tcx> Wf<'a, 'tcx> {
                 }
 
                 // Inspect bounds on this type parameter for any
-                // region bounds.
-                for &r in type_param_def.bounds.region_bounds.iter() {
-                    self.stack.push((r, Some(ty)));
-                    self.accumulate_from_ty(type_param_ty);
-                    self.stack.pop().unwrap();
-                }
+                // // region bounds.
+                // for &r in type_param_def.bounds.region_bounds.iter() {
+                //     self.stack.push((r, Some(ty)));
+                //     self.accumulate_from_ty(type_param_ty);
+                //     self.stack.pop().unwrap();
+                // }
+                panic!("FIXME")
             }
         }
     }

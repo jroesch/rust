@@ -255,7 +255,7 @@ pub fn report_selection_error<'a, 'tcx>(infcx: &InferCtxt<'a, 'tcx>,
 }
 
 pub fn maybe_report_ambiguity<'a, 'tcx>(infcx: &InferCtxt<'a, 'tcx>,
-                                        obligation: &PredicateObligation<'tcx>) {
+                                            obligation: &PredicateObligation<'tcx>) {
     // Unable to successfully determine, probably means
     // insufficient type information, but could mean
     // ambiguous impls. The latter *ought* to be a
@@ -264,53 +264,52 @@ pub fn maybe_report_ambiguity<'a, 'tcx>(infcx: &InferCtxt<'a, 'tcx>,
     let predicate = infcx.resolve_type_vars_if_possible(&obligation.predicate);
 
     debug!("maybe_report_ambiguity(predicate={}, obligation={})",
-           predicate.repr(infcx.tcx),
-           obligation.repr(infcx.tcx));
+        predicate.repr(infcx.tcx),
+        obligation.repr(infcx.tcx));
 
-    match predicate {
-        ty::Predicate::Trait(ref data) => {
-            let trait_ref = data.to_poly_trait_ref();
-            let self_ty = trait_ref.self_ty();
-            let all_types = &trait_ref.substs().types;
-            if all_types.iter().any(|&t| ty::type_is_error(t)) {
-            } else if all_types.iter().any(|&t| ty::type_needs_infer(t)) {
-                // This is kind of a hack: it frequently happens that some earlier
-                // error prevents types from being fully inferred, and then we get
-                // a bunch of uninteresting errors saying something like "<generic
-                // #0> doesn't implement Sized".  It may even be true that we
-                // could just skip over all checks where the self-ty is an
-                // inference variable, but I was afraid that there might be an
-                // inference variable created, registered as an obligation, and
-                // then never forced by writeback, and hence by skipping here we'd
-                // be ignoring the fact that we don't KNOW the type works
-                // out. Though even that would probably be harmless, given that
-                // we're only talking about builtin traits, which are known to be
-                // inhabited. But in any case I just threw in this check for
-                // has_errors() to be sure that compilation isn't happening
-                // anyway. In that case, why inundate the user.
-                if !infcx.tcx.sess.has_errors() {
-                    if
-                        infcx.tcx.lang_items.sized_trait()
-                        .map_or(false, |sized_id| sized_id == trait_ref.def_id())
-                    {
-                        infcx.tcx.sess.span_err(
-                            obligation.cause.span,
-                            format!(
-                                "unable to infer enough type information about `{}`; \
+        match predicate {
+            ty::Predicate::Trait(ref data) => {
+                let trait_ref = data.to_poly_trait_ref();
+                let self_ty = trait_ref.self_ty();
+                let all_types = &trait_ref.substs().types;
+                if all_types.iter().any(|&t| ty::type_is_error(t)) {
+                } else if all_types.iter().any(|&t| ty::type_needs_infer(t)) {
+                    // This is kind of a hack: it frequently happens that some earlier
+                    // error prevents types from being fully inferred, and then we get
+                    // a bunch of uninteresting errors saying something like "<generic
+                    // #0> doesn't implement Sized".  It may even be true that we
+                    // could just skip over all checks where the self-ty is an
+                    // inference variable, but I was afraid that there might be an
+                    // inference variable created, registered as an obligation, and
+                    // then never forced by writeback, and hence by skipping here we'd
+                    // be ignoring the fact that we don't KNOW the type works
+                    // out. Though even that would probably be harmless, given that
+                    // we're only talking about builtin traits, which are known to be
+                    // inhabited. But in any case I just threw in this check for
+                    // has_errors() to be sure that compilation isn't happening
+                    // anyway. In that case, why inundate the user.
+                    if !infcx.tcx.sess.has_errors() {
+                        if infcx.tcx.lang_items.sized_trait()
+                                .map_or(false, |sized_id| sized_id == trait_ref.def_id())
+                                {
+                                    infcx.tcx.sess.span_err(
+                                        obligation.cause.span,
+                                        format!(
+                                            "unable to infer enough type information about `{}`; \
                                  type annotations required",
-                                self_ty.user_string(infcx.tcx)).as_slice());
-                    } else {
-                        infcx.tcx.sess.span_err(
-                            obligation.cause.span,
-                            format!(
-                                "type annotations required: cannot resolve `{}`",
-                                predicate.user_string(infcx.tcx)).as_slice());
-                        note_obligation_cause(infcx, obligation);
-                    }
-                }
-            } else if !infcx.tcx.sess.has_errors() {
-                // Ambiguity. Coherence should have reported an error.
-                infcx.tcx.sess.span_bug(
+                                 self_ty.user_string(infcx.tcx)).as_slice());
+                                } else {
+                                    infcx.tcx.sess.span_err(
+                                        obligation.cause.span,
+                                        format!(
+                                            "type annotations required: cannot resolve `{}`",
+                                            predicate.user_string(infcx.tcx)).as_slice());
+                                    note_obligation_cause(infcx, obligation);
+                                }
+                            }
+                } else if !infcx.tcx.sess.has_errors() {
+                    // Ambiguity. Coherence should have reported an error.
+                    infcx.tcx.sess.span_bug(
                     obligation.cause.span,
                     format!(
                         "coherence failed to report ambiguity: \

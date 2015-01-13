@@ -1770,7 +1770,7 @@ pub struct TypeParameterDef<'tcx> {
     pub def_id: ast::DefId,
     pub space: subst::ParamSpace,
     pub index: u32,
-    pub bounds: ParamBounds<'tcx>,
+    // pub bounds: ParamBounds<'tcx>,
     pub default: Option<Ty<'tcx>>,
 }
 
@@ -1837,6 +1837,12 @@ impl<'tcx> GenericPredicates<'tcx> {
             predicates: self.predicates.subst(tcx, substs),
         }
     }
+
+    pub fn extend<I>(&mut self,
+                  space: subst::ParamSpace,
+                  predicates: I) where I: Iterator<Item=Predicate<'tcx>> {
+        self.predicates.extend(space, predicates)
+    }
 }
 
 #[derive(Clone, PartialEq, Eq, Hash, Show)]
@@ -1864,6 +1870,7 @@ pub enum Predicate<'tcx> {
 pub struct TraitPredicate<'tcx> {
     pub trait_ref: Rc<TraitRef<'tcx>>
 }
+
 pub type PolyTraitPredicate<'tcx> = ty::Binder<TraitPredicate<'tcx>>;
 
 impl<'tcx> TraitPredicate<'tcx> {
@@ -7369,6 +7376,7 @@ impl<'tcx> Repr<'tcx> for field<'tcx> {
                 self.mt.repr(tcx))
     }
 }
+
 
 impl<'a, 'tcx> Repr<'tcx> for ParameterEnvironment<'a, 'tcx> {
     fn repr(&self, tcx: &ctxt<'tcx>) -> String {
