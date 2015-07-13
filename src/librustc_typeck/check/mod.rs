@@ -1778,7 +1778,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
             // it had been solved by previously applying a default.
 
             // We take a snapshot for use in error reporting.
-            let snapshot = self.infcx().type_variables.borrow_mut().snapshot();
+            let snapshot = self.infcx().start_snapshot();
 
             for ty in &unbound_tyvars {
                 if self.infcx().type_var_diverges(ty) {
@@ -1808,10 +1808,12 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
                 }
             }
 
-            // There were some errors to report
+            // There are some errors to report
             if conflicts.len() > 0 {
-                self.infcx().type_variables.borrow_mut().rollback_to(snapshot);
+                self.infcx().rollback_to(snapshot);
 
+                // Loop through each conflicting default compute the conflict
+                // and then report the error.
                 for (conflict, default) in conflicts {
                     let conflicting_default =
                         self.find_conflicting_default(
@@ -1829,7 +1831,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
                                 default)
                 }
             } else {
-                self.infcx().type_variables.borrow_mut().commit(snapshot)
+                self.infcx().commit_from(snapshot)
             }
         }
 
