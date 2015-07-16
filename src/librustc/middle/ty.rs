@@ -114,8 +114,6 @@ pub struct Field<'tcx> {
     pub mt: TypeAndMut<'tcx>
 }
 
-
-
 // Enum information
 #[derive(Clone)]
 pub struct VariantInfo<'tcx> {
@@ -2194,6 +2192,7 @@ pub struct TypeParameterDef<'tcx> {
     pub def_id: ast::DefId,
     pub space: subst::ParamSpace,
     pub index: u32,
+    pub default_def_id: DefId, // for use in error reporing about defaults
     pub default: Option<Ty<'tcx>>,
     pub object_lifetime_default: ObjectLifetimeDefault,
 }
@@ -5097,7 +5096,7 @@ impl<'tcx> fmt::Display for TypeError<'tcx> {
                        values.found)
             },
             TyParamDefaultMismatch(ref values) => {
-                write!(f, "conflicting type parameter defaults {} and {}",
+                write!(f, "conflicting type parameter defaults `{}` and `{}`",
                        values.expected.ty,
                        values.found.ty)
             }
@@ -5466,11 +5465,11 @@ impl<'tcx> ctxt<'tcx> {
                              expected.ty,
                              found.ty));
                 self.sess.span_note(expected.definition_span,
-                    &format!("...a default was defined"));
+                    &format!("a default was defined here..."));
                 self.sess.span_note(expected.origin_span,
                     &format!("...that was applied to an unconstrained type variable here"));
                 self.sess.span_note(found.definition_span,
-                    &format!("...a second default was defined"));
+                    &format!("a second default was defined here..."));
                 self.sess.span_note(found.origin_span,
                     &format!("...that also applies to the same type variable here"));
             }
