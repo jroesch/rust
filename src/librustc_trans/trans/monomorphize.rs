@@ -12,7 +12,7 @@ use back::link::exported_name;
 use llvm::ValueRef;
 use llvm;
 use middle::def_id::DefId;
-use middle::infer::normalize_associated_type;
+use middle::infer::{InferCtxtm normalize_associated_type};
 use middle::subst;
 use middle::subst::{Subst, Substs};
 use middle::ty::fold::{TypeFolder, TypeFoldable};

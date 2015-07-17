@@ -103,6 +103,7 @@ pub use rustc::util;
 use front::map as hir_map;
 use middle::def::Def;
 use middle::infer::{self, TypeOrigin};
+use middle::infer::{self, InferCtxt};
 use middle::subst;
 use middle::ty::{self, Ty, TypeFoldable};
 use session::config;
@@ -183,7 +184,7 @@ fn require_c_abi_if_variadic(tcx: &ty::ctxt,
 }
 
 fn require_same_types<'a, 'tcx, M>(tcx: &ty::ctxt<'tcx>,
-                                   maybe_infcx: Option<&infer::InferCtxt<'a, 'tcx>>,
+                                   maybe_infcx: Option<&InferCtxt<'a, 'tcx>>,
                                    t1_is_expected: bool,
                                    span: Span,
                                    t1: Ty<'tcx>,
@@ -194,11 +195,11 @@ fn require_same_types<'a, 'tcx, M>(tcx: &ty::ctxt<'tcx>,
 {
     let result = match maybe_infcx {
         None => {
-            let infcx = infer::new_infer_ctxt(tcx, &tcx.tables, None);
-            infer::mk_eqty(&infcx, t1_is_expected, TypeOrigin::Misc(span), t1, t2)
+            let infcx = InferCtxt::new(tcx, &tcx.tables, None, false);
+            infcx.mk_eqty(t1_is_expected, TypeOrigin::Misc(span), t1, t2)
         }
         Some(infcx) => {
-            infer::mk_eqty(infcx, t1_is_expected, TypeOrigin::Misc(span), t1, t2)
+            infcx.mk_eqty(t1_is_expected, TypeOrigin::Misc(span), t1, t2)
         }
     };
 

@@ -73,6 +73,7 @@ use middle::ty::{self, ToPolyTraitRef, Ty, TypeScheme};
 use middle::ty::{VariantKind};
 use middle::ty::fold::{TypeFolder};
 use middle::ty::util::IntTypeExt;
+use middle::infer::InferCtxt;
 use rscope::*;
 use rustc::dep_graph::DepNode;
 use rustc::front::map as hir_map;

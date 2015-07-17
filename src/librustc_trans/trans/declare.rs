@@ -21,7 +21,7 @@
 //! * When in doubt, define.
 use llvm::{self, ValueRef};
 use middle::ty;
-use middle::infer;
+use middle::infer::InferCtxt;
 use syntax::abi;
 use trans::attributes;
 use trans::base;
@@ -109,8 +109,8 @@ pub fn declare_rust_fn<'a, 'tcx>(ccx: &CrateContext<'a, 'tcx>, name: &str,
         ty::TyBareFn(_, ref f) => {
             (&f.sig, f.abi, None)
         }
-        ty::TyClosure(closure_did, ref substs) => {
-            let infcx = infer::normalizing_infer_ctxt(ccx.tcx(), &ccx.tcx().tables);
+        ty::TyClosure(closure_did, substs) => {
+            let infcx = InferCtxt::normalizing(ccx.tcx(), &ccx.tcx().tables);
             function_type = infcx.closure_type(closure_did, substs);
             let self_type = base::self_type_for_closure(ccx, closure_did, fn_type);
             let llenvironment_type = type_of::type_of_explicit_arg(ccx, self_type);

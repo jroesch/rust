@@ -13,7 +13,7 @@
 
 use rustc::dep_graph::DepNode;
 use rustc::middle::expr_use_visitor as euv;
-use rustc::middle::infer;
+use rustc::middle::infer::InferCtxt;
 use rustc::middle::mem_categorization as mc;
 use rustc::middle::ty::{self, ParameterEnvironment};
 
@@ -41,7 +41,7 @@ impl<'a, 'tcx, 'v> intravisit::Visitor<'v> for RvalueContext<'a, 'tcx> {
         {
             // FIXME (@jroesch) change this to be an inference context
             let param_env = ParameterEnvironment::for_item(self.tcx, fn_id);
-            let infcx = infer::new_infer_ctxt(self.tcx,
+            let infcx = InferCtxt::new(self.tcx,
                                               &self.tcx.tables,
                                               Some(param_env.clone()));
             let mut delegate = RvalueContextDelegate { tcx: self.tcx, param_env: &param_env };

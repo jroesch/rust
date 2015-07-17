@@ -11,6 +11,7 @@
 use check::regionck::{self, Rcx};
 
 use middle::def_id::DefId;
+use middle::infer::{self, InferCtxt};
 use middle::free_region::FreeRegionMap;
 use middle::infer;
 use middle::region;
@@ -89,6 +90,9 @@ fn ensure_drop_params_and_item_params_correspond<'tcx>(
     let named_type = named_type.subst(tcx, &infcx.parameter_environment.free_substs);
 
     let drop_impl_span = tcx.map.def_id_span(drop_impl_did, codemap::DUMMY_SP);
+                                      named_type_skolem, drop_unifier) {
+            // Even if we did manage to equate the types, the process
+            // may have just gathered unsolvable region constraints
     let fresh_impl_substs =
         infcx.fresh_substs_for_generics(drop_impl_span, drop_impl_generics);
     let fresh_impl_self_ty = drop_impl_ty.subst(tcx, &fresh_impl_substs);

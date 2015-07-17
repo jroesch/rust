@@ -22,7 +22,7 @@ use middle::def_id::{DefId};
 use middle::expr_use_visitor::{ConsumeMode, Delegate, ExprUseVisitor};
 use middle::expr_use_visitor::{LoanCause, MutateMode};
 use middle::expr_use_visitor as euv;
-use middle::infer;
+use middle::infer::InferCtxt;
 use middle::mem_categorization::{cmt};
 use middle::pat_util::*;
 use middle::ty::*;
@@ -1107,7 +1107,7 @@ fn check_legality_of_move_bindings(cx: &MatchCheckCtxt,
                     hir::PatIdent(hir::BindByValue(_), _, ref sub) => {
                         let pat_ty = tcx.node_id_to_type(p.id);
                         //FIXME: (@jroesch) this code should be floated up as well
-                        let infcx = infer::new_infer_ctxt(cx.tcx,
+                        let infcx = InferCtxt::new(cx.tcx,
                                                           &cx.tcx.tables,
                                                           Some(cx.param_env.clone()));
                         if infcx.type_moves_by_default(pat_ty, pat.span) {
@@ -1139,7 +1139,7 @@ fn check_for_mutation_in_guard<'a, 'tcx>(cx: &'a MatchCheckCtxt<'a, 'tcx>,
         cx: cx,
     };
 
-    let infcx = infer::new_infer_ctxt(cx.tcx,
+    let infcx = InferCtxt::new(cx.tcx,
                                       &cx.tcx.tables,
                                       Some(checker.cx.param_env.clone()));
 
