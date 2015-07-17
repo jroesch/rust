@@ -67,11 +67,11 @@ fn overlap<'cx, 'tcx>(selcx: &mut SelectionContext<'cx, 'tcx>,
 
     debug!("overlap: b_trait_ref={:?}", b_trait_ref);
 
-    // Do `a` and `b` unify? If not, no overlap.
-    if let Err(_) = infer::mk_eq_trait_refs(selcx.infcx(),
-                                            true,
+    // Does `a <: b` hold? If not, no overlap.
+    if let Err(_) = selcx.infcx().mk_sub_poly_trait_refs(true, infer::Misc(DUMMY_SP),
+                                                         a_trait_ref.to_poly_trait_ref(),
                                             TypeOrigin::Misc(DUMMY_SP),
-                                            a_trait_ref,
+                                                         b_trait_ref.to_poly_trait_ref()) {
                                             b_trait_ref) {
         return None;
     }

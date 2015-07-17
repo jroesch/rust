@@ -433,8 +433,8 @@ pub fn normalize_param_env_or_error<'a,'tcx>(unnormalized_env: ty::ParameterEnvi
 
     let elaborated_env = unnormalized_env.with_caller_bounds(predicates);
 
-    let infcx = infer::new_infer_ctxt(tcx, &tcx.tables, Some(elaborated_env));
-    let predicates = match fully_normalize(&infcx,
+    let infcx = InferCtxt::new(tcx, &tcx.tables, Some(elaborated_env));
+    let predicates = match fully_normalize(&infcx, cause,
                                            cause,
                                            &infcx.parameter_environment.caller_bounds) {
         Ok(predicates) => predicates,

@@ -18,6 +18,7 @@ use front::map as ast_map;
 use front::map::blocks::FnLikeNode;
 use middle::cstore::{self, CrateStore, InlinedItem};
 use middle::{def, infer, subst, traits};
+use middle::infer::InferCtxt;
 use middle::def_id::DefId;
 use middle::pat_util::def_to_path;
 use middle::ty::{self, Ty};
@@ -1247,7 +1248,7 @@ fn resolve_trait_associated_const<'a, 'tcx: 'a>(tcx: &'a ty::ctxt<'tcx>,
                                               substs: trait_substs });
 
     tcx.populate_implementations_for_trait_if_necessary(trait_ref.def_id());
-    let infcx = infer::new_infer_ctxt(tcx, &tcx.tables, None);
+    let infcx = InferCtxt::new(tcx, &tcx.tables, None);
 
     let mut selcx = traits::SelectionContext::new(&infcx);
     let obligation = traits::Obligation::new(traits::ObligationCause::dummy(),

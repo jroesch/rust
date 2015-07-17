@@ -139,10 +139,10 @@ fn test_env<F>(source_string: &str,
                                lang_items,
                                stability::Index::new(krate),
                                |tcx| {
-                                   let infcx = infer::new_infer_ctxt(tcx, &tcx.tables, None, false);
-                                   body(Env { infcx: &infcx });
-                                   let free_regions = FreeRegionMap::new();
-                                   infcx.resolve_regions_and_report_errors(&free_regions,
+        let infcx = InferCtxt::new(tcx, &tcx.tables, None, false);
+        body(Env { infcx: &infcx });
+        let free_regions = FreeRegionMap::new();
+        infcx.resolve_regions_and_report_errors(&free_regions, ast::CRATE_NODE_ID);
                                                                            ast::CRATE_NODE_ID);
                                    assert_eq!(tcx.sess.err_count(), expected_err_count);
                                });

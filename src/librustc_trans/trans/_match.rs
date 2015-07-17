@@ -195,7 +195,7 @@ use middle::const_eval;
 use middle::def::{self, DefMap};
 use middle::def_id::DefId;
 use middle::expr_use_visitor as euv;
-use middle::infer;
+use middle::infer::InferCtxt;
 use middle::lang_items::StrEqFnLangItem;
 use middle::mem_categorization as mc;
 use middle::mem_categorization::Categorization;
@@ -1477,7 +1477,7 @@ fn is_discr_reassigned(bcx: Block, discr: &hir::Expr, body: &hir::Expr) -> bool 
         reassigned: false
     };
     {
-        let infcx = infer::normalizing_infer_ctxt(bcx.tcx(), &bcx.tcx().tables);
+        let infcx = InferCtxt::normalizing(bcx.tcx(), &bcx.tcx().tables);
         let mut visitor = euv::ExprUseVisitor::new(&mut rc, &infcx);
         visitor.walk_expr(body);
     }

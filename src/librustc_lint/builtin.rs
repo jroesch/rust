@@ -31,6 +31,7 @@
 use middle::{cfg, def, infer, stability, traits};
 use middle::cstore::CrateStore;
 use middle::def_id::DefId;
+use middle::infer::InferCtxt;
 use middle::subst::Substs;
 use middle::ty::{self, Ty};
 use middle::ty::adjustment;
@@ -869,7 +870,7 @@ impl LateLintPass for UnconditionalRecursion {
                     let node_id = tcx.map.as_local_node_id(method.def_id).unwrap();
 
                     let param_env = ty::ParameterEnvironment::for_item(tcx, node_id);
-                    let infcx = infer::new_infer_ctxt(tcx, &tcx.tables, Some(param_env));
+                    let infcx = InferCtxt::new(tcx, &tcx.tables, Some(param_env));
                     let mut selcx = traits::SelectionContext::new(&infcx);
                     match selcx.select(&obligation) {
                         // The method comes from a `T: Trait` bound.
