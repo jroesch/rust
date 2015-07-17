@@ -15,7 +15,7 @@ use middle::cstore::{CrateStore, LOCAL_CRATE};
 use middle::def_id::DefId;
 use middle::traits;
 use middle::ty;
-use middle::infer;
+use middle::infer::InferCtxt;
 use syntax::ast;
 use syntax::codemap::Span;
 use rustc_front::hir;
@@ -127,7 +127,7 @@ impl<'cx, 'tcx> OverlapChecker<'cx, 'tcx> {
                    impl1_def_id,
                    impl2_def_id);
 
-            let infcx = infer::new_infer_ctxt(self.tcx, &self.tcx.tables, None, false);
+            let infcx = InferCtxt::new(self.tcx, &self.tcx.tables, None, false);
             if let Some(trait_ref) = traits::overlapping_impls(&infcx, impl1_def_id, impl2_def_id) {
                 self.report_overlap_error(impl1_def_id, impl2_def_id, trait_ref);
             }

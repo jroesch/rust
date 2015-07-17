@@ -49,6 +49,7 @@ use std::rc::Rc;
 use llvm::{ValueRef, True, IntEQ, IntNE};
 use back::abi::FAT_PTR_ADDR;
 use middle::subst;
+use middle::infer::InferCtxt;
 use middle::ty::{self, Ty};
 use middle::ty::Disr;
 use syntax::ast;

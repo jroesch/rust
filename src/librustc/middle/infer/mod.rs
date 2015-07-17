@@ -522,7 +522,7 @@ pub fn normalize_associated_type<'tcx,T>(tcx: &ty::ctxt<'tcx>, value: &T) -> T
         return value;
     }
 
-    let infcx = new_infer_ctxt(tcx, &tcx.tables, None, true);
+    let infcx = InferCtxt::new(tcx, &tcx.tables, None, true);
     let mut selcx = traits::SelectionContext::new(&infcx);
     let cause = traits::ObligationCause::dummy();
     let traits::Normalized { value: result, obligations } =
@@ -537,6 +537,8 @@ pub fn normalize_associated_type<'tcx,T>(tcx: &ty::ctxt<'tcx>, value: &T) -> T
     for obligation in obligations {
         fulfill_cx.register_predicate_obligation(&infcx, obligation);
     }
+
+    let result = infcx.drain_fulfillment_cx_or_panic(&mut fulfill_cx, &result, DUMMY_SP);
 
     drain_fulfillment_cx_or_panic(DUMMY_SP, &infcx, &mut fulfill_cx, &result)
 }
@@ -559,6 +561,40 @@ pub fn drain_fulfillment_cx_or_panic<'a,'tcx,T>(span: Span,
     }
 }
 
+impl<'a, 'tcx> InferCtxt<'a, 'tcx> {
+    /// errors_will_be_reported is required to proxy to the fulfillment context
+    /// FIXME -- a better option would be to hold back on modifying
+    /// the global cache until we know that all dependent obligations
+    /// are also satisfied. In that case, we could actually remove
+    /// this boolean flag, and we'd also avoid the problem of squelching
+    /// duplicate errors that occur across fns.
+    pub fn new(tcx: &'a ty::ctxt<'tcx>,
+               tables: &'a RefCell<ty::Tables<'tcx>>,
+               param_env: Option<ty::ParameterEnvironment<'a, 'tcx>>,
+               errors_will_be_reported: bool)
+               -> InferCtxt<'a, 'tcx> {
+        InferCtxt {
+            tcx: tcx,
+            tables: tables,
+            type_variables: RefCell::new(type_variable::TypeVariableTable::new()),
+            int_unification_table: RefCell::new(UnificationTable::new()),
+            float_unification_table: RefCell::new(UnificationTable::new()),
+            region_vars: RegionVarBindings::new(tcx),
+            parameter_environment: param_env.unwrap_or(tcx.empty_parameter_environment()),
+            fulfillment_cx: RefCell::new(traits::FulfillmentContext::new(errors_will_be_reported)),
+            normalize: false,
+            err_count_on_creation: tcx.sess.err_count()
+        }
+    }
+
+    pub fn normalizing(tcx: &'a ty::ctxt<'tcx>,
+                       tables: &'a RefCell<ty::Tables<'tcx>>)
+                       -> InferCtxt<'a, 'tcx> {
+        let mut infcx = InferCtxt::new(tcx, tables, None, false);
+        infcx.normalize = true;
+        infcx
+    }
+
 /// Finishes processes any obligations that remain in the fulfillment
 /// context, and then "freshens" and returns `result`. This is
 /// primarily used during normalization and other cases where
@@ -575,19 +611,74 @@ pub fn drain_fulfillment_cx<'a,'tcx,T>(infcx: &InferCtxt<'a,'tcx>,
     debug!("drain_fulfillment_cx(result={:?})",
            result);
 
-    // In principle, we only need to do this so long as `result`
-    // contains unbound type parameters. It could be a slight
-    // optimization to stop iterating early.
-    match fulfill_cx.select_all_or_error(infcx) {
-        Ok(()) => { }
-        Err(errors) => {
-            return Err(errors);
+        let result = self.commit_if_ok(|_| self.lub(a_is_expected, trace.clone()).relate(&a, &b));
+        match result {
+            Ok(t) => t,
+            Err(ref err) => {
+                self.report_and_explain_type_error(trace, err);
+                self.tcx.types.err
+            }
         }
     }
 
-    let result = infcx.resolve_type_vars_if_possible(result);
-    Ok(infcx.tcx.erase_regions(&result))
-}
+    pub fn mk_subty(&self,
+                    a_is_expected: bool,
+                    origin: TypeOrigin,
+                    a: Ty<'tcx>,
+                    b: Ty<'tcx>)
+                    -> UnitResult<'tcx> {
+        debug!("mk_subty({:?} <: {:?})", a, b);
+        self.sub_types(a_is_expected, origin, a, b)
+    }
+
+    pub fn can_mk_subty(&self,
+                        a: Ty<'tcx>,
+                        b: Ty<'tcx>)
+                        -> UnitResult<'tcx> {
+        debug!("can_mk_subty({:?} <: {:?})", a, b);
+        self.probe(|_| {
+            let trace = TypeTrace {
+                origin: Misc(codemap::DUMMY_SP),
+                values: Types(expected_found(true, a, b))
+            };
+            self.sub(true, trace).relate(&a, &b).map(|_| ())
+        })
+    }
+
+    pub fn can_mk_eqty(&self, a: Ty<'tcx>, b: Ty<'tcx>) -> UnitResult<'tcx> {
+        self.can_equate(&a, &b)
+    }
+
+    pub fn mk_subr(&self,
+                   origin: SubregionOrigin<'tcx>,
+                   a: ty::Region,
+                   b: ty::Region) {
+        debug!("mk_subr({:?} <: {:?})", a, b);
+        let snapshot = self.region_vars.start_snapshot();
+        self.region_vars.make_subregion(origin, a, b);
+        self.region_vars.commit(snapshot);
+    }
+
+    pub fn mk_eqty(&self,
+                   a_is_expected: bool,
+                   origin: TypeOrigin,
+                   a: Ty<'tcx>,
+                   b: Ty<'tcx>)
+                   -> UnitResult<'tcx> {
+        debug!("mk_eqty({:?} <: {:?})", a, b);
+        self.commit_if_ok(|_| self  .eq_types(a_is_expected, origin, a, b))
+    }
+
+    pub fn mk_sub_poly_trait_refs(&self,
+                                  a_is_expected: bool,
+                                  origin: TypeOrigin,
+                                  a: ty::PolyTraitRef<'tcx>,
+                                  b: ty::PolyTraitRef<'tcx>)
+                                  -> UnitResult<'tcx> {
+        debug!("mk_sub_trait_refs({:?} <: {:?})",
+               a, b);
+        self.commit_if_ok(|_| self.sub_poly_trait_refs(a_is_expected, origin, a.clone(), b.clone()))
+    }
 
 impl<'a, 'tcx> InferCtxt<'a, 'tcx> {
     pub fn freshen<T:TypeFoldable<'tcx>>(&self, t: T) -> T {
@@ -944,7 +1035,7 @@ impl<'a, 'tcx> InferCtxt<'a, 'tcx> {
             let (ty::EquatePredicate(a, b), skol_map) =
                 self.skolemize_late_bound_regions(predicate, snapshot);
             let origin = TypeOrigin::EquatePredicate(span);
-            let () = try!(mk_eqty(self, false, origin, a, b));
+            let () = try!(self.mk_eqty(false, origin, a, b));
             self.leak_check(&skol_map, snapshot)
         })
     }
@@ -957,7 +1048,7 @@ impl<'a, 'tcx> InferCtxt<'a, 'tcx> {
             let (ty::OutlivesPredicate(r_a, r_b), skol_map) =
                 self.skolemize_late_bound_regions(predicate, snapshot);
             let origin = RelateRegionParamBound(span);
-            let () = mk_subr(self, origin, r_b, r_a); // `b : a` ==> `a <= b`
+            let () = self.mk_subr(origin, r_b, r_a); // `b : a` ==> `a <= b`
             self.leak_check(&skol_map, snapshot)
         })
     }
@@ -1544,6 +1635,13 @@ impl<'a, 'tcx> InferCtxt<'a, 'tcx> {
         } else {
             closure_ty
         }
+
+        // Use freshen to simultaneously replace all type variables with
+        // their bindings and replace all regions with 'static.  This is
+        // sort of overkill because we do not expect there to be any
+        // unbound type variables, hence no `TyFresh` types should ever be
+        // inserted.
+        Ok(result.fold_with(&mut self.freshener()))
     }
 }
 

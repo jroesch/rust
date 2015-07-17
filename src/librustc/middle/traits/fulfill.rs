@@ -12,6 +12,7 @@ use middle::infer::InferCtxt;
 use middle::ty::{self, RegionEscape, Ty, HasTypeFlags};
 
 use syntax::ast;
+use rustc_data_structures::snapshot_vec::{SnapshotVec, SnapshotVecDelegate};
 use util::common::ErrorReported;
 use util::nodemap::{FnvHashSet, NodeMap};
 
@@ -31,6 +32,15 @@ pub struct FulfilledPredicates<'tcx> {
     set: FnvHashSet<ty::Predicate<'tcx>>
 }
 
+
+impl<'tcx> SnapshotVecDelegate for PredicateObligation<'tcx> {
+    type Value = Self;
+    type Undo = ();
+
+    fn reverse(values: &mut Vec<PredicateObligation<'tcx>>, _action: ()) {
+        ()
+    }
+}
 /// The fulfillment context is used to drive trait resolution.  It
 /// consists of a list of obligations that must be (eventually)
 /// satisfied. The job is to track which are satisfied, which yielded
@@ -57,7 +67,7 @@ pub struct FulfillmentContext<'tcx> {
 
     // A list of all obligations that have been registered with this
     // fulfillment context.
-    predicates: Vec<PredicateObligation<'tcx>>,
+    predicates: SnapshotVec<PredicateObligation<'tcx>>,
 
     // Remembers the count of trait obligations that we have already
     // attempted to select. This is used to avoid repeating work
@@ -121,7 +131,7 @@ impl<'tcx> FulfillmentContext<'tcx> {
     pub fn new(errors_will_be_reported: bool) -> FulfillmentContext<'tcx> {
         FulfillmentContext {
             duplicate_set: FulfilledPredicates::new(),
-            predicates: Vec::new(),
+            predicates: SnapshotVec::new(),
             attempted_mark: 0,
             region_obligations: NodeMap(),
             errors_will_be_reported: errors_will_be_reported,

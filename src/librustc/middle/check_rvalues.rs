@@ -12,7 +12,7 @@
 // is the public starting point.
 
 use middle::expr_use_visitor as euv;
-use middle::infer;
+use middle::infer::InferCtxt;
 use middle::mem_categorization as mc;
 use middle::ty::ParameterEnvironment;
 use middle::ty;
@@ -42,7 +42,7 @@ impl<'a, 'tcx, 'v> intravisit::Visitor<'v> for RvalueContext<'a, 'tcx> {
         {
             // FIXME (@jroesch) change this to be an inference context
             let param_env = ParameterEnvironment::for_item(self.tcx, fn_id);
-            let infcx = infer::new_infer_ctxt(self.tcx,
+            let infcx = InferCtxt::new(self.tcx,
                                               &self.tcx.tables,
                                               Some(param_env.clone()),
                                               false);
