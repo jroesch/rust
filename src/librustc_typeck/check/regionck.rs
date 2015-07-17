@@ -1893,7 +1893,7 @@ fn declared_projection_bounds_from_trait<'a,'tcx>(rcx: &Rcx<'a, 'tcx>,
                        outlives);
 
                 // check whether this predicate applies to our current projection
-                match infer::mk_eqty(infcx, false, TypeOrigin::Misc(span), ty, outlives.0) {
+                match infcx.mk_eqty(false, TypeOrigin::Misc(span), ty, outlives.0) {
                     Ok(()) => { Ok(outlives.1) }
                     Err(_) => { Err(()) }
                 }

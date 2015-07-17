@@ -31,7 +31,7 @@ use middle::const_eval::EvalHint::ExprTypeChecked;
 use middle::def;
 use middle::def_id::DefId;
 use middle::expr_use_visitor as euv;
-use middle::infer;
+use middle::infer::InferCtxt;
 use middle::mem_categorization as mc;
 use middle::mem_categorization::Categorization;
 use middle::traits;
@@ -124,7 +124,7 @@ impl<'a, 'tcx> CheckCrateVisitor<'a, 'tcx> {
             None => self.tcx.empty_parameter_environment()
         };
 
-        let infcx = infer::new_infer_ctxt(self.tcx, &self.tcx.tables, Some(param_env));
+        let infcx = InferCtxt::new(self.tcx, &self.tcx.tables, Some(param_env));
 
         f(&mut euv::ExprUseVisitor::new(self, &infcx))
     }
@@ -293,7 +293,7 @@ impl<'a, 'tcx> CheckCrateVisitor<'a, 'tcx> {
 
     fn check_static_type(&self, e: &hir::Expr) {
         let ty = self.tcx.node_id_to_type(e.id);
-        let infcx = infer::new_infer_ctxt(self.tcx, &self.tcx.tables, None);
+        let infcx = InferCtxt::new(self.tcx, &self.tcx.tables, None);
         let cause = traits::ObligationCause::new(e.span, e.id, traits::SharedStatic);
         let mut fulfill_cx = infcx.fulfillment_cx.borrow_mut();
         fulfill_cx.register_builtin_bound(&infcx, ty, ty::BoundSync, cause);

@@ -33,7 +33,7 @@ use middle::ty::TyProjection;
 use middle::ty::util::CopyImplementationError;
 use middle::free_region::FreeRegionMap;
 use CrateCtxt;
-use middle::infer::{self, InferCtxt, TypeOrigin, new_infer_ctxt};
+use middle::infer::{self, InferCtxt, TypeOrigin};
 use std::cell::RefCell;
 use std::rc::Rc;
 use syntax::codemap::Span;
@@ -370,7 +370,7 @@ impl<'a, 'tcx> CoherenceChecker<'a, 'tcx> {
             debug!("check_implementations_of_coerce_unsized: {:?} -> {:?} (free)",
                    source, target);
 
-            let infcx = new_infer_ctxt(tcx, &tcx.tables, Some(param_env));
+            let infcx = InferCtxt::new(tcx, &tcx.tables, Some(param_env));
 
             let check_mutbl = |mt_a: ty::TypeAndMut<'tcx>, mt_b: ty::TypeAndMut<'tcx>,
                                mk_ptr: &Fn(Ty<'tcx>) -> Ty<'tcx>| {
@@ -384,7 +384,7 @@ impl<'a, 'tcx> CoherenceChecker<'a, 'tcx> {
                 (&ty::TyBox(a), &ty::TyBox(b)) => (a, b, unsize_trait, None),
 
                 (&ty::TyRef(r_a, mt_a), &ty::TyRef(r_b, mt_b)) => {
-                    infer::mk_subr(&infcx, infer::RelateObjectBound(span), *r_b, *r_a);
+                    infcx.mk_subr(infer::RelateObjectBound(span), *r_b, *r_a);
                     check_mutbl(mt_a, mt_b, &|ty| tcx.mk_imm_ref(r_b, ty))
                 }
 
@@ -510,7 +510,7 @@ fn enforce_trait_manually_implementable(tcx: &ty::ctxt, sp: Span, trait_def_id: 
 pub fn check_coherence(crate_context: &CrateCtxt) {
     CoherenceChecker {
         crate_context: crate_context,
-        inference_context: new_infer_ctxt(crate_context.tcx, &crate_context.tcx.tables, None),
+        inference_context: InferCtxt::new(crate_context.tcx, &crate_context.tcx.tables, None),
         inherent_impls: RefCell::new(FnvHashMap()),
     }.check(crate_context.tcx.map.krate());
     unsafety::check(crate_context.tcx);

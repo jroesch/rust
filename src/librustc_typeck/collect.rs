@@ -80,7 +80,7 @@ use middle::ty::{self, RegionEscape, ToPolyTraitRef, Ty, TypeScheme};
 use middle::ty::{VariantKind};
 use middle::ty::fold::{TypeFolder, TypeFoldable};
 use middle::ty::util::IntTypeExt;
-use middle::infer;
+use middle::infer::InferCtxt;
 use rscope::*;
 use rustc::front::map as hir_map;
 use util::common::{ErrorReported, memoized};
@@ -2330,7 +2330,7 @@ fn check_method_self_type<'a, 'tcx, RS:RegionScope>(
                base_type,
                base_type_free);
 
-        let infcx = infer::new_infer_ctxt(tcx, &tcx.tables, None);
+        let infcx = InferCtxt::new(tcx, &tcx.tables, None);
         drop(::require_same_types(tcx,
                                   Some(&infcx),
                                   false,

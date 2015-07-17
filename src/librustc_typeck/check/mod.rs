@@ -87,6 +87,7 @@ use middle::astconv_util::prohibit_type_params;
 use middle::cstore::LOCAL_CRATE;
 use middle::def;
 use middle::def_id::DefId;
+use middle::infer::{self, InferCtxt};
 use middle::infer;
 use middle::infer::{TypeOrigin, type_variable};
 use middle::pat_util::{self, pat_id_map};
@@ -303,7 +304,7 @@ impl<'a, 'tcx> Inherited<'a, 'tcx> {
            -> Inherited<'a, 'tcx> {
 
         Inherited {
-            infcx: infer::new_infer_ctxt(tcx, tables, Some(param_env)),
+            infcx: InferCtxt::new(tcx, tables, Some(param_env)),
             locals: RefCell::new(NodeMap()),
             tables: tables,
             deferred_call_resolutions: RefCell::new(DefIdMap()),
@@ -1583,7 +1584,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
                     sub: Ty<'tcx>,
                     sup: Ty<'tcx>)
                     -> Result<(), TypeError<'tcx>> {
-        infer::mk_subty(self.infcx(), a_is_expected, origin, sub, sup)
+        self.infcx().mk_subty(a_is_expected, origin, sub, sup)
     }
 
     pub fn mk_eqty(&self,
@@ -1592,14 +1593,14 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
                    sub: Ty<'tcx>,
                    sup: Ty<'tcx>)
                    -> Result<(), TypeError<'tcx>> {
-        infer::mk_eqty(self.infcx(), a_is_expected, origin, sub, sup)
+        self.infcx().mk_eqty(a_is_expected, origin, sub, sup)
     }
 
     pub fn mk_subr(&self,
                    origin: infer::SubregionOrigin<'tcx>,
                    sub: ty::Region,
                    sup: ty::Region) {
-        infer::mk_subr(self.infcx(), origin, sub, sup)
+        self.infcx().mk_subr(origin, sub, sup)
     }
 
     pub fn type_error_message<M>(&self,
@@ -2858,18 +2859,16 @@ fn check_expr_with_unifier<'a, 'tcx, F>(fcx: &FnCtxt<'a, 'tcx>,
             Some(ref else_expr) => {
                 check_expr_with_expectation(fcx, &**else_expr, expected);
                 let else_ty = fcx.expr_ty(&**else_expr);
-                infer::common_supertype(fcx.infcx(),
-                                        TypeOrigin::IfExpression(sp),
-                                        true,
-                                        then_ty,
-                                        else_ty)
+                fcx.infcx().common_supertype(TypeOrigin::IfExpression(sp),
+                                             true,
+                                             then_ty,
+                                             else_ty)
             }
             None => {
-                infer::common_supertype(fcx.infcx(),
-                                        TypeOrigin::IfExpressionWithNoElse(sp),
-                                        false,
-                                        then_ty,
-                                        fcx.tcx().mk_nil())
+                fcx.infcx().common_supertype(TypeOrigin::IfExpressionWithNoElse(sp),
+                                             false,
+                                             then_ty,
+                                             fcx.tcx().mk_nil())
             }
         };
 
@@ -3657,11 +3656,10 @@ fn check_expr_with_unifier<'a, 'tcx, F>(fcx: &FnCtxt<'a, 'tcx>,
                   Some(fcx.tcx().types.err)
               }
               (Some(t_start), Some(t_end)) => {
-                  Some(infer::common_supertype(fcx.infcx(),
-                                               TypeOrigin::RangeExpression(expr.span),
-                                               true,
-                                               t_start,
-                                               t_end))
+                  Some(fcx.infcx().common_supertype(TypeOrigin::RangeExpression(expr.span),
+                                                    true,
+                                                    t_start,
+                                                    t_end))
               }
               _ => None
           };

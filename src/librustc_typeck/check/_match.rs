@@ -537,8 +537,7 @@ pub fn check_match<'a, 'tcx>(fcx: &FnCtxt<'a, 'tcx>,
                 ),
             };
 
-            infer::common_supertype(
-                fcx.infcx(),
+            fcx.infcx().common_supertype(
                 origin,
                 true,
                 expected,
