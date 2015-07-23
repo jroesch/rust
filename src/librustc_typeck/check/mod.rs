@@ -1734,7 +1734,6 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
             let mut unbound_tyvars = HashSet::new();
 
             debug!("select_all_obligations_and_apply_defaults: defaults={:?}", default_map);
-
             // We loop over the unsolved variables, resolving them and if they are
             // and unconstrainted numberic type we add them to the set of unbound
             // variables. We do this so we only apply literal fallback to type
@@ -1742,7 +1741,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
             for ty in &unsolved_variables {
                 let resolved = self.infcx().resolve_type_vars_if_possible(ty);
                 if self.infcx().type_var_diverges(resolved) {
-                    demand::eqtype(self, codemap::DUMMY_SP, *ty, self.tcx().mk_nil());
+                    unbound_tyvars.insert(resolved);
                 } else {
                     match self.infcx().type_is_unconstrained_numeric(resolved) {
                         UnconstrainedInt | UnconstrainedFloat => {
@@ -1796,32 +1795,29 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
             // for conflicts and correctly report them.
             let _ = self.infcx().commit_if_ok(|_: &infer::CombinedSnapshot| {
                 for ty in &unbound_tyvars {
-                    if self.infcx().type_var_diverges(ty) {
-                        demand::eqtype(self, codemap::DUMMY_SP, *ty, self.tcx().mk_nil());
-                    } else {
-                        match self.infcx().type_is_unconstrained_numeric(ty) {
-                            UnconstrainedInt => {
-                                demand::eqtype(self, codemap::DUMMY_SP, *ty, self.tcx().types.i32)
-                            },
-                            UnconstrainedFloat => {
-                                demand::eqtype(self, codemap::DUMMY_SP, *ty, self.tcx().types.f64)
-                            }
-                            Neither => {
-                                if let Some(default) = default_map.get(ty) {
-                                    let default = default.clone();
-                                    match infer::mk_eqty(self.infcx(), false,
-                                                         infer::Misc(default.origin_span),
-                                                         ty, default.ty) {
-                                        Ok(()) => {}
-                                        Err(_) => {
-                                            conflicts.push((*ty, default));
-                                        }
+                if !self.infcx().type_var_diverges(ty) {
+                    match self.infcx().type_is_unconstrained_numeric(ty) {
+                        UnconstrainedInt => {
+                            demand::eqtype(self, codemap::DUMMY_SP, *ty, self.tcx().types.i32)
+                        },
+                        UnconstrainedFloat => {
+                            demand::eqtype(self, codemap::DUMMY_SP, *ty, self.tcx().types.f64)
+                        }
+                        Neither => {
+                            if let Some(default) = default_map.get(ty) {
+                                let default = default.clone();
+                                match infer::mk_eqty(self.infcx(), false,
+                                                     infer::Misc(default.origin_span),
+                                                     ty, default.ty) {
+                                    Ok(()) => {}
+                                    Err(_) => {
+                                        conflicts.push((*ty, default));
                                     }
                                 }
                             }
                         }
                     }
-                }
+                }}
 
                 // If there are conflicts we rollback, otherwise commit
                 if conflicts.len() > 0 {
@@ -1830,6 +1826,15 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
                     Ok(())
                 }
             });
+
+            // Finally apply the unit fallback rules.
+            for ty in &unbound_tyvars {
+                if self.infcx().type_var_diverges(ty) {
+                    demand::eqtype(self, codemap::DUMMY_SP, *ty, self.tcx().mk_nil());
+                }
+            }
+
+            self.select_obligations_where_possible();
 
             if conflicts.len() > 0 {
                 // Loop through each conflicting default, figuring out the default that caused
