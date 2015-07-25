@@ -34,7 +34,11 @@
 extern crate core;
 #[macro_use] extern crate log;
 extern crate serialize as rustc_serialize; // used by deriving
+extern crate core;
 
+pub mod snapshot_vec;
+pub mod snapshot_tree;
+pub mod graph;
 pub mod bitvec;
 pub mod graph;
 pub mod ivar;
