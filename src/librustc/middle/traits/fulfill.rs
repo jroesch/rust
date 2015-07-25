@@ -13,7 +13,6 @@ use middle::ty::{self, RegionEscape, Ty, HasTypeFlags};
 use rustc_data_structures::obligation_forest::{Backtrace, ObligationForest, Error};
 
 use syntax::ast;
-use rustc_data_structures::snapshot_vec::{SnapshotVec, SnapshotVecDelegate};
 use util::common::ErrorReported;
 use util::nodemap::{FnvHashSet, NodeMap};
 
@@ -34,15 +33,6 @@ pub struct FulfilledPredicates<'tcx> {
     set: FnvHashSet<ty::Predicate<'tcx>>
 }
 
-
-impl<'tcx> SnapshotVecDelegate for PredicateObligation<'tcx> {
-    type Value = Self;
-    type Undo = ();
-
-    fn reverse(values: &mut Vec<PredicateObligation<'tcx>>, _action: ()) {
-        ()
-    }
-}
 /// The fulfillment context is used to drive trait resolution.  It
 /// consists of a list of obligations that must be (eventually)
 /// satisfied. The job is to track which are satisfied, which yielded
