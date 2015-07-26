@@ -9,6 +9,7 @@
 // except according to those terms.
 
 use super::combine::{self, CombineFields};
+use super::InferCtxt;
 use super::higher_ranked::HigherRankedRelations;
 use super::{Subtype};
 use super::type_variable::{EqTo};
@@ -17,21 +18,26 @@ use middle::ty::{self, Ty};
 use middle::ty::TyVar;
 use middle::ty::relate::{Relate, RelateResult, TypeRelation};
 
-/// Ensures `a` is made equal to `b`. Returns `a` on success.
-pub struct Equate<'a, 'tcx: 'a> {
-    fields: CombineFields<'a, 'tcx>
+use std::cell::{RefMut};
+
+pub struct Equate<'infcx, 'a: 'infcx, 'tcx: 'a> {
+    fields: CombineFields<'infcx, 'a, 'tcx>
 }
 
-impl<'a, 'tcx> Equate<'a, 'tcx> {
-    pub fn new(fields: CombineFields<'a, 'tcx>) -> Equate<'a, 'tcx> {
+impl< 'infcx, 'a, 'tcx> Equate< 'infcx, 'a, 'tcx> {
+    pub fn new(fields: CombineFields<'infcx, 'a, 'tcx>) -> Equate< 'infcx, 'a, 'tcx> {
         Equate { fields: fields }
     }
 }
 
-impl<'a, 'tcx> TypeRelation<'a,'tcx> for Equate<'a, 'tcx> {
+impl<'infcx, 'a, 'tcx> TypeRelation<'infcx,'a,'tcx> for Equate<'infcx, 'a, 'tcx> {
     fn tag(&self) -> &'static str { "Equate" }
 
     fn tcx(&self) -> &'a ty::ctxt<'tcx> { self.fields.tcx() }
+
+    fn infcx(&self) -> RefMut<&'infcx mut InferCtxt<'a, 'tcx>> {
+         self.fields.infcx.borrow_mut()
+    }
 
     fn a_is_expected(&self) -> bool { self.fields.a_is_expected }
 
@@ -49,11 +55,16 @@ impl<'a, 'tcx> TypeRelation<'a,'tcx> for Equate<'a, 'tcx> {
                a, b);
         if a == b { return Ok(a); }
 
-        let infcx = self.fields.infcx;
-        let a = infcx.type_variables.borrow().replace_if_possible(a);
-        let b = infcx.type_variables.borrow().replace_if_possible(b);
+        let (a, b) = {
+            let infcx = self.fields.infcx.borrow_mut();
+            let a = infcx.type_variables.borrow().replace_if_possible(a);
+            let b = infcx.type_variables.borrow().replace_if_possible(b);
+            (a, b)
+        };
+
         match (&a.sty, &b.sty) {
             (&ty::TyInfer(TyVar(a_id)), &ty::TyInfer(TyVar(b_id))) => {
+                let infcx = self.fields.infcx.borrow_mut();
                 infcx.type_variables.borrow_mut().relate_vars(a_id, EqTo, b_id);
                 Ok(a)
             }
@@ -81,7 +92,7 @@ impl<'a, 'tcx> TypeRelation<'a,'tcx> for Equate<'a, 'tcx> {
                a,
                b);
         let origin = Subtype(self.fields.trace.clone());
-        self.fields.infcx.region_vars.make_eqregion(origin, a, b);
+        self.fields.infcx.borrow_mut().region_vars.make_eqregion(origin, a, b);
         Ok(a)
     }
 

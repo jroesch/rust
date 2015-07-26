@@ -370,10 +370,11 @@ impl<'a, 'tcx> CoherenceChecker<'a, 'tcx> {
             debug!("check_implementations_of_coerce_unsized: {:?} -> {:?} (free)",
                    source, target);
 
-            let infcx = InferCtxt::new(tcx, &tcx.tables, Some(param_env));
+            let mut infcx = InferCtxt::new(tcx, &tcx.tables, Some(param_env));
 
-            let check_mutbl = |mt_a: ty::TypeAndMut<'tcx>, mt_b: ty::TypeAndMut<'tcx>,
-                               mk_ptr: &Fn(Ty<'tcx>) -> Ty<'tcx>| {
+            let mut check_mutbl = |infcx: &mut InferCtxt<'a, 'tcx>,
+                                   mt_a: ty::TypeAndMut<'tcx>, mt_b: ty::TypeAndMut<'tcx>,
+                                   mk_ptr: &Fn(Ty<'tcx>) -> Ty<'tcx>| {
                 if (mt_a.mutbl, mt_b.mutbl) == (hir::MutImmutable, hir::MutMutable) {
                     infcx.report_mismatched_types(span, mk_ptr(mt_b.ty),
                                                   target, &ty::error::TypeError::Mutability);
@@ -385,12 +386,12 @@ impl<'a, 'tcx> CoherenceChecker<'a, 'tcx> {
 
                 (&ty::TyRef(r_a, mt_a), &ty::TyRef(r_b, mt_b)) => {
                     infcx.mk_subr(infer::RelateObjectBound(span), *r_b, *r_a);
-                    check_mutbl(mt_a, mt_b, &|ty| tcx.mk_imm_ref(r_b, ty))
+                    check_mutbl(&mut infcx, mt_a, mt_b, &|ty| tcx.mk_imm_ref(r_b, ty))
                 }
 
                 (&ty::TyRef(_, mt_a), &ty::TyRawPtr(mt_b)) |
                 (&ty::TyRawPtr(mt_a), &ty::TyRawPtr(mt_b)) => {
-                    check_mutbl(mt_a, mt_b, &|ty| tcx.mk_imm_ptr(ty))
+                    check_mutbl(&mut infcx, mt_a, mt_b, &|ty| tcx.mk_imm_ptr(ty))
                 }
 
                 (&ty::TyStruct(def_a, substs_a), &ty::TyStruct(def_b, substs_b)) => {
@@ -459,17 +460,15 @@ impl<'a, 'tcx> CoherenceChecker<'a, 'tcx> {
                 }
             };
 
-            let mut fulfill_cx = infcx.fulfillment_cx.borrow_mut();
-
             // Register an obligation for `A: Trait<B>`.
             let cause = traits::ObligationCause::misc(span, impl_node_id);
             let predicate = traits::predicate_for_trait_def(tcx, cause, trait_def_id,
                                                             0, source, vec![target]);
-            fulfill_cx.register_predicate_obligation(&infcx, predicate);
+            infcx.register_predicate_obligation(predicate);
 
             // Check that all transitive obligations are satisfied.
-            if let Err(errors) = fulfill_cx.select_all_or_error(&infcx) {
-                traits::report_fulfillment_errors(&infcx, &errors);
+            if let Err(errors) = infcx.select_all_or_error() {
+                traits::report_fulfillment_errors(&mut infcx, &errors);
             }
 
             // Finally, resolve all regions.

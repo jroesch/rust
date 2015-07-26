@@ -186,7 +186,7 @@ pub fn lookup_in_trait_adjusted<'a, 'tcx>(fcx: &FnCtxt<'a, 'tcx>,
         }
 
         None => {
-            fcx.inh.infcx.type_vars_for_defs(
+            fcx.infcx().type_vars_for_defs(
                 span,
                 subst::ParamSpace::TypeSpace,
                 &mut substs,
@@ -203,8 +203,10 @@ pub fn lookup_in_trait_adjusted<'a, 'tcx>(fcx: &FnCtxt<'a, 'tcx>,
                                               poly_trait_ref.to_predicate());
 
     // Now we want to know if this can be matched
-    let mut selcx = traits::SelectionContext::new(fcx.infcx());
-    if !selcx.evaluate_obligation(&obligation) {
+    let cond = traits::SelectionContext::scoped(&mut fcx.infcx(), |mut selcx|
+        !selcx.evaluate_obligation(&obligation));
+
+    if cond {
         debug!("--> Cannot match obligation");
         return None; // Cannot be matched, no such method resolution is possible.
     }

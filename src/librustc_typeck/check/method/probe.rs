@@ -19,6 +19,7 @@ use middle::def_id::DefId;
 use middle::subst;
 use middle::subst::Subst;
 use middle::traits;
+use middle::transactional::Transactional;
 use middle::ty::{self, NoPreference, RegionEscape, Ty, ToPolyTraitRef, TraitRef};
 use middle::ty::HasTypeFlags;
 use middle::ty::fold::TypeFoldable;
@@ -30,12 +31,13 @@ use rustc_front::hir;
 use std::collections::HashSet;
 use std::mem;
 use std::rc::Rc;
+use std::cell::{RefMut};
 
 use self::CandidateKind::*;
 pub use self::PickKind::*;
 
-struct ProbeContext<'a, 'tcx:'a> {
-    fcx: &'a FnCtxt<'a, 'tcx>,
+struct ProbeContext<'fcx, 'a: 'fcx, 'tcx:'a> {
+    fcx: &'fcx FnCtxt<'a, 'tcx>,
     span: Span,
     mode: Mode,
     item_name: ast::Name,
@@ -180,7 +182,7 @@ pub fn probe<'a, 'tcx>(fcx: &FnCtxt<'a, 'tcx>,
 
     // this creates one big transaction so that all type variables etc
     // that we create during the probe process are removed later
-    fcx.infcx().probe(|_| {
+    fcx.infcx().probe(|_, _| {
         let mut probe_cx = ProbeContext::new(fcx,
                                              span,
                                              mode,
@@ -229,8 +231,8 @@ fn create_steps<'a, 'tcx>(fcx: &FnCtxt<'a, 'tcx>,
     Some(steps)
 }
 
-impl<'a,'tcx> ProbeContext<'a,'tcx> {
-    fn new(fcx: &'a FnCtxt<'a,'tcx>,
+impl<'fcx, 'a, 'tcx> ProbeContext<'fcx, 'a,'tcx> {
+    fn new(fcx: &'fcx FnCtxt<'a,'tcx>,
            span: Span,
            mode: Mode,
            item_name: ast::Name,
@@ -264,7 +266,7 @@ impl<'a,'tcx> ProbeContext<'a,'tcx> {
         self.fcx.tcx()
     }
 
-    fn infcx(&self) -> &'a InferCtxt<'a, 'tcx> {
+    fn infcx(&self) -> RefMut<InferCtxt<'a, 'tcx>> {
         self.fcx.infcx()
     }
 
@@ -383,9 +385,11 @@ impl<'a,'tcx> ProbeContext<'a,'tcx> {
     fn assemble_inherent_impl_candidates_for_type(&mut self, def_id: DefId) {
         // Read the inherent implementation candidates for this type from the
         // metadata if necessary.
-        self.tcx().populate_inherent_implementations_for_type_if_necessary(def_id);
+        let tcx = self.tcx();
 
-        if let Some(impl_infos) = self.tcx().inherent_impls.borrow().get(&def_id) {
+        tcx.populate_inherent_implementations_for_type_if_necessary(def_id);
+
+        if let Some(impl_infos) = tcx.inherent_impls.borrow().get(&def_id) {
             for &impl_def_id in impl_infos.iter() {
                 self.assemble_inherent_impl_probe(impl_def_id);
             }
@@ -418,9 +422,11 @@ impl<'a,'tcx> ProbeContext<'a,'tcx> {
         // We can't use normalize_associated_types_in as it will pollute the
         // fcx's fulfillment context after this probe is over.
         let cause = traits::ObligationCause::misc(self.span, self.fcx.body_id);
-        let mut selcx = &mut traits::SelectionContext::new(self.fcx.infcx());
         let traits::Normalized { value: xform_self_ty, obligations } =
-            traits::normalize(selcx, cause, &xform_self_ty);
+            traits::SelectionContext::scoped(&mut self.fcx.infcx(), |mut selcx| {
+                traits::normalize(&mut selcx, cause, &xform_self_ty)
+             });
+
         debug!("assemble_inherent_impl_probe: xform_self_ty = {:?}",
                xform_self_ty);
 
@@ -466,7 +472,7 @@ impl<'a,'tcx> ProbeContext<'a,'tcx> {
         // FIXME -- Do we want to commit to this behavior for param bounds?
 
         let bounds: Vec<_> =
-            self.fcx.inh.infcx.parameter_environment.caller_bounds
+            self.fcx.infcx().parameter_environment.caller_bounds
             .iter()
             .filter_map(|predicate| {
                 match *predicate {
@@ -536,8 +542,8 @@ impl<'a,'tcx> ProbeContext<'a,'tcx> {
         bounds: &[ty::PolyTraitRef<'tcx>],
         mut mk_cand: F,
     ) where
-        F: for<'b> FnMut(
-            &mut ProbeContext<'b, 'tcx>,
+        F: for<'f, 'b> FnMut(
+            &mut ProbeContext<'f, 'b, 'tcx>,
             ty::PolyTraitRef<'tcx>,
             ty::ImplOrTraitItem<'tcx>,
         ),
@@ -661,9 +667,11 @@ impl<'a,'tcx> ProbeContext<'a,'tcx> {
             // as it will pollute the fcx's fulfillment context after this probe
             // is over.
             let cause = traits::ObligationCause::misc(self.span, self.fcx.body_id);
-            let mut selcx = &mut traits::SelectionContext::new(self.fcx.infcx());
+
             let traits::Normalized { value: xform_self_ty, obligations } =
-                traits::normalize(selcx, cause, &xform_self_ty);
+                traits::SelectionContext::scoped(&mut self.fcx.infcx(), |mut selcx| {
+                    traits::normalize(&mut selcx, cause, &xform_self_ty)
+                });
 
             debug!("xform_self_ty={:?}", xform_self_ty);
 
@@ -816,7 +824,7 @@ impl<'a,'tcx> ProbeContext<'a,'tcx> {
         debug!("assemble_where_clause_candidates(trait_def_id={:?})",
                trait_def_id);
 
-        let caller_predicates = self.fcx.inh.infcx.parameter_environment.caller_bounds.clone();
+        let caller_predicates = self.fcx.infcx().parameter_environment.caller_bounds.clone();
         for poly_bound in traits::elaborate_predicates(self.tcx(), caller_predicates)
                           .filter_map(|p| p.to_opt_poly_trait_ref())
                           .filter(|b| b.def_id() == trait_def_id)
@@ -1029,7 +1037,7 @@ impl<'a,'tcx> ProbeContext<'a,'tcx> {
                self_ty,
                probe);
 
-        self.infcx().probe(|_| {
+        self.infcx().probe(|_, infcx| {
             // First check that the self type can be related.
             match self.make_sub_ty(self_ty, probe.xform_self_ty) {
                 Ok(()) => { }
@@ -1060,35 +1068,37 @@ impl<'a,'tcx> ProbeContext<'a,'tcx> {
                 }
             };
 
-            let selcx = &mut traits::SelectionContext::new(self.infcx());
             let cause = traits::ObligationCause::misc(self.span, self.fcx.body_id);
 
             // Check whether the impl imposes obligations we have to worry about.
             let impl_bounds = self.tcx().lookup_predicates(impl_def_id);
             let impl_bounds = impl_bounds.instantiate(self.tcx(), substs);
-            let traits::Normalized { value: impl_bounds,
-                                        obligations: norm_obligations } =
-                traits::normalize(selcx, cause.clone(), &impl_bounds);
+            traits::SelectionContext::scoped(&mut self.infcx(), |mut selcx| {
 
-            // Convert the bounds into obligations.
-            let obligations =
-                traits::predicates_for_generics(cause.clone(),
-                                                &impl_bounds);
-            debug!("impl_obligations={:?}", obligations);
+                let traits::Normalized { value: impl_bounds,
+                                         obligations: norm_obligations } =
+                    traits::normalize(&mut selcx, cause.clone(), &impl_bounds);
 
-            // Evaluate those obligations to see if they might possibly hold.
-            let mut all_true = true;
-            for o in obligations.iter()
-                .chain(norm_obligations.iter())
-                .chain(ref_obligations.iter()) {
-                if !selcx.evaluate_obligation(o) {
-                    all_true = false;
-                    if let &ty::Predicate::Trait(ref pred) = &o.predicate {
-                        possibly_unsatisfied_predicates.push(pred.0.trait_ref);
+                // Convert the bounds into obligations.
+                let obligations =
+                    traits::predicates_for_generics(cause.clone(),
+                                                    &impl_bounds);
+                debug!("impl_obligations={:?}", obligations);
+
+                // Evaluate those obligations to see if they might possibly hold.
+                let mut all_true = true;
+                for o in obligations.iter()
+                    .chain(norm_obligations.iter())
+                    .chain(ref_obligations.iter()) {
+                        if !selcx.evaluate_obligation(o) {
+                            all_true = false;
+                            if let &ty::Predicate::Trait(ref pred) = &o.predicate {
+                                possibly_unsatisfied_predicates.push(pred.0.trait_ref);
+                            }
+                        }
                     }
-                }
-            }
-            all_true
+                all_true
+            })
         })
     }
 

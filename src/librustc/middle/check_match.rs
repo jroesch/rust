@@ -27,6 +27,7 @@ use middle::mem_categorization::{cmt};
 use middle::pat_util::*;
 use middle::ty::*;
 use middle::ty;
+use std::cell::RefCell;
 use std::cmp::Ordering;
 use std::fmt;
 use std::iter::{FromIterator, IntoIterator, repeat};
@@ -1092,7 +1093,7 @@ fn check_legality_of_move_bindings(cx: &MatchCheckCtxt,
                     hir::PatIdent(hir::BindByValue(_), _, ref sub) => {
                         let pat_ty = tcx.node_id_to_type(p.id);
                         //FIXME: (@jroesch) this code should be floated up as well
-                        let infcx = InferCtxt::new(cx.tcx,
+                        let mut infcx = InferCtxt::new(cx.tcx,
                                                           &cx.tcx.tables,
                                                           Some(cx.param_env.clone()));
                         if infcx.type_moves_by_default(pat_ty, pat.span) {
@@ -1124,11 +1125,12 @@ fn check_for_mutation_in_guard<'a, 'tcx>(cx: &'a MatchCheckCtxt<'a, 'tcx>,
         cx: cx,
     };
 
-    let infcx = InferCtxt::new(cx.tcx,
+    let mut infcx = RefCell::new(InferCtxt::new(
+        cx.tcx,
                                       &cx.tcx.tables,
                                       Some(checker.cx.param_env.clone()));
 
-    let mut visitor = ExprUseVisitor::new(&mut checker, &infcx);
+    let mut visitor = ExprUseVisitor::new(&mut checker, &mut infcx);
     visitor.walk_expr(guard);
 }
 

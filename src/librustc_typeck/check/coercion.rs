@@ -65,6 +65,7 @@ use check::{autoderef, FnCtxt, UnresolvedTypeAction};
 use middle::infer::{self, Coercion, TypeOrigin};
 use middle::traits::{self, ObligationCause};
 use middle::traits::{predicate_for_trait_def, report_selection_error};
+use middle::transactional::Transactional;
 use middle::ty::adjustment::{AutoAdjustment, AutoDerefRef, AdjustDerefRef};
 use middle::ty::adjustment::{AutoPtr, AutoUnsafe, AdjustReifyFnPointer};
 use middle::ty::adjustment::{AdjustUnsafeFnPointer};
@@ -77,15 +78,15 @@ use std::cell::RefCell;
 use std::collections::VecDeque;
 use rustc_front::hir;
 
-struct Coerce<'a, 'tcx: 'a> {
-    fcx: &'a FnCtxt<'a, 'tcx>,
+struct Coerce<'fcx, 'a: 'fcx, 'tcx: 'a> {
+    fcx: &'fcx FnCtxt<'a, 'tcx>,
     origin: infer::TypeOrigin,
     unsizing_obligations: RefCell<Vec<traits::PredicateObligation<'tcx>>>,
 }
 
 type CoerceResult<'tcx> = RelateResult<'tcx, Option<AutoAdjustment<'tcx>>>;
 
-impl<'f, 'tcx> Coerce<'f, 'tcx> {
+impl<'fcx, 'f, 'tcx> Coerce<'fcx, 'f, 'tcx> {
     fn tcx(&self) -> &ty::ctxt<'tcx> {
         self.fcx.tcx()
     }
@@ -276,7 +277,7 @@ impl<'f, 'tcx> Coerce<'f, 'tcx> {
         };
         let source = source.adjust_for_autoref(self.tcx(), reborrow);
 
-        let mut selcx = traits::SelectionContext::new(self.fcx.infcx());
+        let mut selcx = traits::SelectionContext::new(panic!());
 
         // Use a FIFO queue for this custom fulfillment procedure.
         let mut queue = VecDeque::new();
@@ -315,7 +316,7 @@ impl<'f, 'tcx> Coerce<'f, 'tcx> {
 
                 // Object safety violations or miscellaneous.
                 Err(err) => {
-                    report_selection_error(self.fcx.infcx(), &obligation, &err);
+                    report_selection_error(&mut self.fcx.infcx(), &obligation, &err);
                     // Treat this like an obligation and follow through
                     // with the unsizing - the lack of a coercion should
                     // be silent, as it causes a type mismatch later.
@@ -441,7 +442,7 @@ pub fn mk_assignty<'a, 'tcx>(fcx: &FnCtxt<'a, 'tcx>,
     debug!("mk_assignty({:?} -> {:?})", a, b);
     let mut unsizing_obligations = vec![];
     let adjustment = try!(indent(|| {
-        fcx.infcx().commit_if_ok(|_| {
+        fcx.infcx().commit_if_ok(|_, _| {
             let coerce = Coerce {
                 fcx: fcx,
                 origin: TypeOrigin::ExprAssignable(expr.span),

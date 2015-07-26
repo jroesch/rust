@@ -32,8 +32,8 @@ pub enum Implication<'tcx> {
     Predicate(DefId, ty::Predicate<'tcx>),
 }
 
-struct Implicator<'a, 'tcx: 'a> {
-    infcx: &'a InferCtxt<'a,'tcx>,
+struct Implicator<'infcx, 'a:'infcx, 'tcx: 'a> {
+    infcx: &'infcx mut InferCtxt<'a,'tcx>,
     body_id: ast::NodeId,
     stack: Vec<(ty::Region, Option<Ty<'tcx>>)>,
     span: Span,
@@ -43,8 +43,8 @@ struct Implicator<'a, 'tcx: 'a> {
 
 /// This routine computes the well-formedness constraints that must hold for the type `ty` to
 /// appear in a context with lifetime `outer_region`
-pub fn implications<'a,'tcx>(
-    infcx: &'a InferCtxt<'a,'tcx>,
+pub fn implications<'infcx,'a,'tcx>(
+    infcx: &'infcx mut InferCtxt<'a,'tcx>,
     body_id: ast::NodeId,
     ty: Ty<'tcx>,
     outer_region: ty::Region,
@@ -69,9 +69,13 @@ pub fn implications<'a,'tcx>(
     wf.out
 }
 
-impl<'a, 'tcx> Implicator<'a, 'tcx> {
+impl<'infcx,'a, 'tcx> Implicator<'infcx,'a, 'tcx> {
     fn tcx(&self) -> &'a ty::ctxt<'tcx> {
         self.infcx.tcx
+    }
+
+    fn infcx(&mut self) -> &mut InferCtxt<'a, 'tcx> {
+        self.infcx
     }
 
     fn accumulate_from_ty(&mut self, ty: Ty<'tcx>) {
@@ -403,11 +407,12 @@ impl<'a, 'tcx> Implicator<'a, 'tcx> {
         }
     }
 
-    fn fully_normalize<T>(&self, value: &T) -> Result<T,ErrorReported>
+    fn fully_normalize<T>(&mut self, value: &T) -> Result<T,ErrorReported>
         where T : TypeFoldable<'tcx> + ty::HasTypeFlags
     {
+        let infcx: &mut InferCtxt = self.infcx;
         let value =
-            traits::fully_normalize(self.infcx,
+            traits::fully_normalize(infcx,
                                     traits::ObligationCause::misc(self.span, self.body_id),
                                     value);
         match value {
@@ -418,7 +423,7 @@ impl<'a, 'tcx> Implicator<'a, 'tcx> {
                 // I don't really expect errors to arise here
                 // frequently. I guess the best option would be to
                 // propagate them out.
-                traits::report_fulfillment_errors(self.infcx, &errors);
+                traits::report_fulfillment_errors(infcx, &errors);
                 Err(ErrorReported)
             }
         }

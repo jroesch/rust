@@ -69,7 +69,7 @@ fn check_closure<'a,'tcx>(fcx: &FnCtxt<'a,'tcx>,
     let closure_type =
         fcx.ccx.tcx.mk_closure(
             expr_def_id,
-            fcx.ccx.tcx.mk_substs(fcx.inh.infcx.parameter_environment.free_substs.clone()),
+            fcx.ccx.tcx.mk_substs(fcx.infcx().parameter_environment.free_substs.clone()),
             upvar_tys);
 
     fcx.write_ty(expr.id, closure_type);
@@ -134,11 +134,10 @@ fn deduce_expectations_from_obligations<'a,'tcx>(
     expected_vid: ty::TyVid)
     -> (Option<ty::FnSig<'tcx>>, Option<ty::ClosureKind>)
 {
-    let fulfillment_cx = fcx.inh.infcx.fulfillment_cx.borrow();
     // Here `expected_ty` is known to be a type inference variable.
 
     let expected_sig =
-        fulfillment_cx
+        fcx.infcx()
         .pending_obligations()
         .iter()
         .map(|obligation| &obligation.obligation)
@@ -166,7 +165,7 @@ fn deduce_expectations_from_obligations<'a,'tcx>(
     // like `F : Fn<A>`. Note that due to subtyping we could encounter
     // many viable options, so pick the most restrictive.
     let expected_kind =
-        fulfillment_cx
+        fcx.infcx()
         .pending_obligations()
         .iter()
         .map(|obligation| &obligation.obligation)
