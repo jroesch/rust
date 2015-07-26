@@ -43,6 +43,7 @@ use std::hash;
 use std::mem::transmute;
 use std::{i8, i16, i32, i64, u8, u16, u32, u64};
 use std::rc::Rc;
+use std::cell::RefCell;
 
 fn lookup_const<'a>(tcx: &'a ty::ctxt, e: &Expr) -> Option<&'a Expr> {
     let opt_def = tcx.def_map.borrow().get(&e.id).map(|d| d.full_def());
@@ -1248,9 +1249,9 @@ fn resolve_trait_associated_const<'a, 'tcx: 'a>(tcx: &'a ty::ctxt<'tcx>,
                                               substs: trait_substs });
 
     tcx.populate_implementations_for_trait_if_necessary(trait_ref.def_id());
-    let infcx = InferCtxt::new(tcx, &tcx.tables, None, false);
-
-    let mut selcx = traits::SelectionContext::new(&infcx);
+    let mut infcx = InferCtxt::new(tcx, &tcx.tables, None, false);
+    let cell = RefCell::new(&mut infcx);
+    let mut selcx = traits::SelectionContext::new(&cell);
     let obligation = traits::Obligation::new(traits::ObligationCause::dummy(),
                                              trait_ref.to_poly_trait_predicate());
     let selection = match selcx.select(&obligation) {

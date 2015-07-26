@@ -23,9 +23,10 @@ use middle::ty::fold::TypeFoldable;
 use middle::infer::{self, fixup_err_to_string, InferCtxt};
 
 use std::rc::Rc;
+use std::cell::RefCell;
 use syntax::ast;
 use syntax::codemap::{Span, DUMMY_SP};
-
+use middle::transactional::Transactional;
 pub use self::error_reporting::TraitErrorKey;
 pub use self::error_reporting::report_fulfillment_errors;
 pub use self::error_reporting::report_overflow_error;
@@ -34,7 +35,6 @@ pub use self::error_reporting::report_object_safety_error;
 pub use self::coherence::orphan_check;
 pub use self::coherence::overlapping_impls;
 pub use self::coherence::OrphanCheckErr;
-pub use self::fulfill::{FulfillmentContext, FulfilledPredicates, RegionObligation};
 pub use self::project::MismatchedProjectionTypes;
 pub use self::project::normalize;
 pub use self::project::Normalized;
@@ -53,21 +53,23 @@ pub use self::util::elaborate_predicates;
 pub use self::util::get_vtable_index_of_object_method;
 pub use self::util::trait_ref_for_builtin_bound;
 pub use self::util::predicate_for_trait_def;
+pub use self::util::predicate_for_builtin_bound;
 pub use self::util::supertraits;
 pub use self::util::Supertraits;
 pub use self::util::supertrait_def_ids;
 pub use self::util::SupertraitDefIds;
 pub use self::util::transitive_bounds;
 pub use self::util::upcast;
+pub use util::common::ErrorReported;
 
 mod coherence;
 mod error_reporting;
-mod fulfill;
-mod project;
 mod object_safety;
+// Come back and fix privacy once compiling
+pub mod project;
 mod select;
 mod structural_impls;
-mod util;
+pub mod util;
 
 /// An `Obligation` represents some trait reference (e.g. `int:Eq`) for
 /// which the vtable must be found.  The process of finding a vtable is
@@ -327,7 +329,7 @@ pub fn predicates_for_generics<'tcx>(cause: ObligationCause<'tcx>,
 /// `bound` or is not known to meet bound (note that this is
 /// conservative towards *no impl*, which is the opposite of the
 /// `evaluate` methods).
-pub fn type_known_to_meet_builtin_bound<'a,'tcx>(infcx: &InferCtxt<'a,'tcx>,
+pub fn type_known_to_meet_builtin_bound<'a,'tcx>(infcx: &mut InferCtxt<'a,'tcx>,
                                                  ty: Ty<'tcx>,
                                                  bound: ty::BuiltinBound,
                                                  span: Span)
@@ -362,12 +364,12 @@ pub fn type_known_to_meet_builtin_bound<'a,'tcx>(infcx: &InferCtxt<'a,'tcx>,
         // anyhow).
         let cause = ObligationCause::misc(span, ast::DUMMY_NODE_ID);
 
-        fulfill_cx.register_builtin_bound(infcx, ty, bound, cause);
+        infcx.register_builtin_bound(ty, bound, cause);
 
         // Note: we only assume something is `Copy` if we can
         // *definitively* show that it implements `Copy`. Otherwise,
         // assume it is move; linear is always ok.
-        match fulfill_cx.select_all_or_error(infcx) {
+        match infcx.select_all_or_error() {
             Ok(()) => {
                 debug!("type_known_to_meet_builtin_bound: ty={:?} bound={:?} success",
                        ty,
@@ -382,9 +384,7 @@ pub fn type_known_to_meet_builtin_bound<'a,'tcx>(infcx: &InferCtxt<'a,'tcx>,
                 false
             }
         }
-    } else {
-        result
-    }
+    })
 }
 
 // FIXME: this is gonna need to be removed ...
@@ -433,12 +433,12 @@ pub fn normalize_param_env_or_error<'a,'tcx>(unnormalized_env: ty::ParameterEnvi
 
     let elaborated_env = unnormalized_env.with_caller_bounds(predicates);
 
-    let infcx = InferCtxt::new(tcx, &tcx.tables, Some(elaborated_env), false);
-    let predicates = match fully_normalize(&infcx, cause,
-                                           &infcx.parameter_environment.caller_bounds) {
+    let mut infcx = InferCtxt::new(tcx, &tcx.tables, Some(elaborated_env), false);
+    let caller_bounds = infcx.parameter_environment.caller_bounds.clone();
+    let predicates = match fully_normalize(&mut infcx, cause, &caller_bounds) {
         Ok(predicates) => predicates,
         Err(errors) => {
-            report_fulfillment_errors(&infcx, &errors);
+            report_fulfillment_errors(&mut infcx, &errors);
             return infcx.parameter_environment; // an unnormalized env is better than nothing
         }
     };
@@ -464,7 +464,7 @@ pub fn normalize_param_env_or_error<'a,'tcx>(unnormalized_env: ty::ParameterEnvi
     infcx.parameter_environment.with_caller_bounds(predicates)
 }
 
-pub fn fully_normalize<'a,'tcx,T>(infcx: &InferCtxt<'a,'tcx>,
+pub fn fully_normalize<'a,'tcx,T>(infcx: &mut InferCtxt<'a,'tcx>,
                                   cause: ObligationCause<'tcx>,
                                   value: &T)
                                   -> Result<T, Vec<FulfillmentError<'tcx>>>
@@ -472,7 +472,6 @@ pub fn fully_normalize<'a,'tcx,T>(infcx: &InferCtxt<'a,'tcx>,
 {
     debug!("normalize_param_env(value={:?})", value);
 
-    let mut selcx = &mut SelectionContext::new(infcx);
     // FIXME (@jroesch) ISSUE 26721
     // I'm not sure if this is a bug or not, needs further investigation.
     // It appears that by reusing the fulfillment_cx here we incur more
@@ -486,21 +485,26 @@ pub fn fully_normalize<'a,'tcx,T>(infcx: &InferCtxt<'a,'tcx>,
     //
     // I think we should probably land this refactor and then come
     // back to this is a follow-up patch.
-    let mut fulfill_cx = FulfillmentContext::new(false);
+    infcx.probe(move |_, infcx| {
 
-    let Normalized { value: normalized_value, obligations } =
-        project::normalize(selcx, cause, value);
-    debug!("normalize_param_env: normalized_value={:?} obligations={:?}",
-           normalized_value,
-           obligations);
-    for obligation in obligations {
-        fulfill_cx.register_predicate_obligation(selcx.infcx(), obligation);
-    }
+        let Normalized { value: normalized_value, obligations } =
+            project::scoped_selcx(infcx, |mut selcx| {
+                project::normalize(&mut selcx, cause, value)
+            });
 
-    try!(fulfill_cx.select_all_or_error(infcx));
-    let resolved_value = infcx.resolve_type_vars_if_possible(&normalized_value);
-    debug!("normalize_param_env: resolved_value={:?}", resolved_value);
-    Ok(resolved_value)
+        debug!("normalize_param_env: normalized_value={:?} obligations={:?}",
+               normalized_value,
+               obligations);
+
+        for obligation in obligations {
+            infcx.register_predicate_obligation(obligation);
+        }
+
+        try!(infcx.select_all_or_error());
+        let resolved_value = infcx.resolve_type_vars_if_possible(&normalized_value);
+        debug!("normalize_param_env: resolved_value={:?}", resolved_value);
+        Ok(resolved_value)
+    })
 }
 
 impl<'tcx,O> Obligation<'tcx,O> {
@@ -551,6 +555,24 @@ impl<'tcx> ObligationCause<'tcx> {
     }
 }
 
+/// This marker is used in some caches to record whether the
+/// predicate, if it is found to be false, will yield a warning (due
+/// to RFC1214) or an error. We separate these two cases in the cache
+/// so that if we see the same predicate twice, first resulting in a
+/// warning, and next resulting in an error, we still report the
+/// error, rather than considering it a duplicate.
+#[derive(Copy, Clone, PartialEq, Eq, Hash)]
+pub struct RFC1214Warning(pub bool);
+
+impl<'tcx> ObligationCauseCode<'tcx> {
+    pub fn is_rfc1214(&self) -> bool {
+        match *self {
+            ObligationCauseCode::RFC1214(..) => true,
+            _ => false,
+        }
+    }
+}
+
 impl<'tcx, N> Vtable<'tcx, N> {
     pub fn nested_obligations(self) -> Vec<N> {
         match self {
@@ -590,7 +612,7 @@ impl<'tcx, N> Vtable<'tcx, N> {
 }
 
 impl<'tcx> FulfillmentError<'tcx> {
-    fn new(obligation: PredicateObligation<'tcx>,
+    pub fn new(obligation: PredicateObligation<'tcx>,
            code: FulfillmentErrorCode<'tcx>)
            -> FulfillmentError<'tcx>
     {

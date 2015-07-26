@@ -228,13 +228,13 @@ impl<'tcx> ty::ctxt<'tcx> {
 }
 
 pub trait ErrorReporting<'tcx> {
-    fn report_region_errors(&self,
+    fn report_region_errors(&mut self,
                             errors: &Vec<RegionResolutionError<'tcx>>);
 
     fn process_errors(&self, errors: &Vec<RegionResolutionError<'tcx>>)
                       -> Vec<RegionResolutionError<'tcx>>;
 
-    fn report_type_error(&self,
+    fn report_type_error(&mut self,
                          trace: TypeTrace<'tcx>,
                          terr: &TypeError<'tcx>)
                          -> DiagnosticBuilder<'tcx>;
@@ -248,31 +248,31 @@ pub trait ErrorReporting<'tcx> {
                                      trace: TypeTrace<'tcx>,
                                      terr: &TypeError<'tcx>);
 
-    fn values_str(&self, values: &ValuePairs<'tcx>) -> Option<String>;
+    fn values_str(&mut self, values: &ValuePairs<'tcx>) -> Option<String>;
 
     fn expected_found_str<T: fmt::Display + Resolvable<'tcx> + HasTypeFlags>(
-        &self,
+        &mut self,
         exp_found: &ty::error::ExpectedFound<T>)
         -> Option<String>;
 
-    fn report_concrete_failure(&self,
+    fn report_concrete_failure(&mut self,
                                origin: SubregionOrigin<'tcx>,
                                sub: Region,
                                sup: Region);
 
-    fn report_generic_bound_failure(&self,
+    fn report_generic_bound_failure(&mut self,
                                     origin: SubregionOrigin<'tcx>,
                                     kind: GenericKind<'tcx>,
                                     sub: Region);
 
-    fn report_sub_sup_conflict(&self,
+    fn report_sub_sup_conflict(&mut self,
                                var_origin: RegionVariableOrigin,
                                sub_origin: SubregionOrigin<'tcx>,
                                sub_region: Region,
                                sup_origin: SubregionOrigin<'tcx>,
                                sup_region: Region);
 
-    fn report_processed_errors(&self,
+    fn report_processed_errors(&mut self,
                                var_origin: &[RegionVariableOrigin],
                                trace_origin: &[(TypeTrace<'tcx>, TypeError<'tcx>)],
                                same_regions: &[SameRegions]);
@@ -285,7 +285,7 @@ trait ErrorReportingHelpers<'tcx> {
                                 var_origin: RegionVariableOrigin)
                                 -> DiagnosticBuilder<'tcx>;
 
-    fn note_region_origin(&self,
+    fn note_region_origin(&mut self,
                           err: &mut DiagnosticBuilder,
                           origin: &SubregionOrigin<'tcx>);
 
@@ -301,7 +301,7 @@ trait ErrorReportingHelpers<'tcx> {
 }
 
 impl<'a, 'tcx> ErrorReporting<'tcx> for InferCtxt<'a, 'tcx> {
-    fn report_region_errors(&self,
+    fn report_region_errors(&mut self,
                             errors: &Vec<RegionResolutionError<'tcx>>) {
         let p_errors = self.process_errors(errors);
         let errors = if p_errors.is_empty() { errors } else { &p_errors };
@@ -475,7 +475,7 @@ impl<'a, 'tcx> ErrorReporting<'tcx> for InferCtxt<'a, 'tcx> {
         }
     }
 
-    fn report_type_error(&self,
+    fn report_type_error(&mut self,
                          trace: TypeTrace<'tcx>,
                          terr: &TypeError<'tcx>)
                          -> DiagnosticBuilder<'tcx> {
@@ -556,7 +556,7 @@ impl<'a, 'tcx> ErrorReporting<'tcx> for InferCtxt<'a, 'tcx> {
         }
     }
 
-    fn report_and_explain_type_error(&self,
+    fn report_and_explain_type_error(&mut self,
                                      trace: TypeTrace<'tcx>,
                                      terr: &TypeError<'tcx>) {
         let span = trace.origin.span();
@@ -567,7 +567,7 @@ impl<'a, 'tcx> ErrorReporting<'tcx> for InferCtxt<'a, 'tcx> {
 
     /// Returns a string of the form "expected `{}`, found `{}`", or None if this is a derived
     /// error.
-    fn values_str(&self, values: &ValuePairs<'tcx>) -> Option<String> {
+    fn values_str(&mut self, values: &ValuePairs<'tcx>) -> Option<String> {
         match *values {
             infer::Types(ref exp_found) => self.expected_found_str(exp_found),
             infer::TraitRefs(ref exp_found) => self.expected_found_str(exp_found),
@@ -595,7 +595,7 @@ impl<'a, 'tcx> ErrorReporting<'tcx> for InferCtxt<'a, 'tcx> {
                      found))
     }
 
-    fn report_generic_bound_failure(&self,
+    fn report_generic_bound_failure(&mut self,
                                     origin: SubregionOrigin<'tcx>,
                                     bound_kind: GenericKind<'tcx>,
                                     sub: Region)
@@ -664,7 +664,7 @@ impl<'a, 'tcx> ErrorReporting<'tcx> for InferCtxt<'a, 'tcx> {
         err.emit();
     }
 
-    fn report_concrete_failure(&self,
+    fn report_concrete_failure(&mut self,
                                origin: SubregionOrigin<'tcx>,
                                sub: Region,
                                sup: Region) {
@@ -934,7 +934,7 @@ impl<'a, 'tcx> ErrorReporting<'tcx> for InferCtxt<'a, 'tcx> {
         }
     }
 
-    fn report_sub_sup_conflict(&self,
+    fn report_sub_sup_conflict(&mut self,
                                var_origin: RegionVariableOrigin,
                                sub_origin: SubregionOrigin<'tcx>,
                                sub_region: Region,
@@ -958,7 +958,7 @@ impl<'a, 'tcx> ErrorReporting<'tcx> for InferCtxt<'a, 'tcx> {
         err.emit();
     }
 
-    fn report_processed_errors(&self,
+    fn report_processed_errors(&mut self,
                                var_origins: &[RegionVariableOrigin],
                                trace_origins: &[(TypeTrace<'tcx>, TypeError<'tcx>)],
                                same_regions: &[SameRegions]) {
@@ -1643,7 +1643,7 @@ impl<'a, 'tcx> ErrorReportingHelpers<'tcx> for InferCtxt<'a, 'tcx> {
                   var_description)
     }
 
-    fn note_region_origin(&self, err: &mut DiagnosticBuilder, origin: &SubregionOrigin<'tcx>) {
+    fn note_region_origin(&mut self, err: &mut DiagnosticBuilder, origin: &SubregionOrigin<'tcx>) {
         match *origin {
             infer::Subtype(ref trace) => {
                 let desc = match trace.origin {
@@ -1842,17 +1842,17 @@ impl<'a, 'tcx> ErrorReportingHelpers<'tcx> for InferCtxt<'a, 'tcx> {
 }
 
 pub trait Resolvable<'tcx> {
-    fn resolve<'a>(&self, infcx: &InferCtxt<'a, 'tcx>) -> Self;
+    fn resolve<'a>(&self, infcx: &mut InferCtxt<'a, 'tcx>) -> Self;
 }
 
 impl<'tcx> Resolvable<'tcx> for Ty<'tcx> {
-    fn resolve<'a>(&self, infcx: &InferCtxt<'a, 'tcx>) -> Ty<'tcx> {
+    fn resolve<'a>(&self, infcx: &mut InferCtxt<'a, 'tcx>) -> Ty<'tcx> {
         infcx.resolve_type_vars_if_possible(self)
     }
 }
 
 impl<'tcx> Resolvable<'tcx> for ty::TraitRef<'tcx> {
-    fn resolve<'a>(&self, infcx: &InferCtxt<'a, 'tcx>)
+    fn resolve<'a>(&self, infcx: &mut InferCtxt<'a, 'tcx>)
                    -> ty::TraitRef<'tcx> {
         infcx.resolve_type_vars_if_possible(self)
     }
@@ -1860,7 +1860,7 @@ impl<'tcx> Resolvable<'tcx> for ty::TraitRef<'tcx> {
 
 impl<'tcx> Resolvable<'tcx> for ty::PolyTraitRef<'tcx> {
     fn resolve<'a>(&self,
-                   infcx: &InferCtxt<'a, 'tcx>)
+                   infcx: &mut InferCtxt<'a, 'tcx>)
                    -> ty::PolyTraitRef<'tcx>
     {
         infcx.resolve_type_vars_if_possible(self)

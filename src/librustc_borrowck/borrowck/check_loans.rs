@@ -31,6 +31,7 @@ use syntax::codemap::Span;
 use rustc_front::hir;
 
 use std::rc::Rc;
+use std::cell::RefCell;
 
 // FIXME (#16118): These functions are intended to allow the borrow checker to
 // be less precise in its handling of Box while still allowing moves out of a
@@ -201,18 +202,19 @@ pub fn check_loans<'a, 'b, 'c, 'tcx>(bccx: &BorrowckCtxt<'a, 'tcx>,
     debug!("check_loans(body id={})", body.id);
 
     let param_env = ty::ParameterEnvironment::for_item(bccx.tcx, fn_id);
-    let infcx = InferCtxt::new(bccx.tcx, &bccx.tcx.tables, Some(param_env), false);
+    let infcx = InferCtxt::new(bccx.tcx, &bccx.tcx.tables, Some(param_env.clone()), false);
 
     let mut clcx = CheckLoanCtxt {
         bccx: bccx,
         dfcx_loans: dfcx_loans,
         move_data: move_data,
         all_loans: all_loans,
-        param_env: &infcx.parameter_environment
+        param_env: &param_env,
     };
 
     {
-        let mut euv = euv::ExprUseVisitor::new(&mut clcx, &infcx);
+        let cell = RefCell::new(infcx);
+        let mut euv = euv::ExprUseVisitor::new(&mut clcx, &cell);
         euv.walk_fn(decl, body);
     }
 }

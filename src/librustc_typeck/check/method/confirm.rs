@@ -22,9 +22,10 @@ use middle::infer;
 use middle::infer::{InferCtxt, TypeOrigin};
 use syntax::codemap::Span;
 use rustc_front::hir;
+use std::cell::{RefMut};
 
-struct ConfirmContext<'a, 'tcx:'a> {
-    fcx: &'a FnCtxt<'a, 'tcx>,
+struct ConfirmContext<'a, 'cx:'a, 'tcx:'cx> {
+    fcx: &'a FnCtxt<'cx, 'tcx>,
     span: Span,
     self_expr: &'tcx hir::Expr,
     call_expr: &'tcx hir::Expr,
@@ -62,12 +63,12 @@ pub fn confirm<'a, 'tcx>(fcx: &FnCtxt<'a, 'tcx>,
     confirm_cx.confirm(unadjusted_self_ty, pick, supplied_method_types)
 }
 
-impl<'a,'tcx> ConfirmContext<'a,'tcx> {
-    fn new(fcx: &'a FnCtxt<'a, 'tcx>,
+impl<'r,'a,'tcx> ConfirmContext<'r,'a,'tcx> {
+    fn new(fcx: &'r FnCtxt<'a, 'tcx>,
            span: Span,
            self_expr: &'tcx hir::Expr,
            call_expr: &'tcx hir::Expr)
-           -> ConfirmContext<'a, 'tcx>
+           -> ConfirmContext<'r, 'a, 'tcx>
     {
         ConfirmContext { fcx: fcx, span: span, self_expr: self_expr, call_expr: call_expr }
     }
@@ -275,7 +276,7 @@ impl<'a,'tcx> ConfirmContext<'a,'tcx> {
     }
 
     fn extract_trait_ref<R, F>(&mut self, self_ty: Ty<'tcx>, mut closure: F) -> R where
-        F: FnMut(&mut ConfirmContext<'a, 'tcx>, Ty<'tcx>, &ty::TraitTy<'tcx>) -> R,
+        F: FnMut(&mut ConfirmContext<'r, 'a, 'tcx>, Ty<'tcx>, &ty::TraitTy<'tcx>) -> R,
     {
         // If we specified that this is an object method, then the
         // self-type ought to be something that can be dereferenced to
@@ -613,11 +614,11 @@ impl<'a,'tcx> ConfirmContext<'a,'tcx> {
     ///////////////////////////////////////////////////////////////////////////
     // MISCELLANY
 
-    fn tcx(&self) -> &'a ty::ctxt<'tcx> {
+    fn tcx(&self) -> &ty::ctxt<'tcx> {
         self.fcx.tcx()
     }
 
-    fn infcx(&self) -> &'a InferCtxt<'a, 'tcx> {
+    fn infcx(&self) -> RefMut<InferCtxt<'a, 'tcx>> {
         self.fcx.infcx()
     }
 

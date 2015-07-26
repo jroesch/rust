@@ -21,15 +21,18 @@ use middle::cstore::LOCAL_CRATE;
 use middle::def_id::DefId;
 use middle::subst::{Subst, Substs, TypeSpace};
 use middle::ty::{self, Ty};
+use middle::transactional::Transactional;
+use middle::ty::{self, ToPolyTraitRef, Ty};
 use middle::infer::{self, InferCtxt, TypeOrigin};
 use syntax::codemap::{DUMMY_SP, Span};
+use std::cell::RefCell;
 
 #[derive(Copy, Clone)]
 struct InferIsLocal(bool);
 
 /// If there are types that satisfy both impls, returns a `TraitRef`
 /// with those types substituted (by updating the given `infcx`)
-pub fn overlapping_impls<'cx, 'tcx>(infcx: &InferCtxt<'cx, 'tcx>,
+pub fn overlapping_impls<'cx, 'tcx>(infcx: &mut InferCtxt<'cx, 'tcx>,
                                     impl1_def_id: DefId,
                                     impl2_def_id: DefId)
                                     -> Option<ty::TraitRef<'tcx>>
@@ -40,7 +43,8 @@ pub fn overlapping_impls<'cx, 'tcx>(infcx: &InferCtxt<'cx, 'tcx>,
            impl1_def_id,
            impl2_def_id);
 
-    let selcx = &mut SelectionContext::intercrate(infcx);
+    let cell = RefCell::new(infcx);
+    let selcx = &mut SelectionContext::intercrate(&cell);
     overlap(selcx, impl1_def_id, impl2_def_id)
 }
 
@@ -79,12 +83,17 @@ fn overlap<'cx, 'tcx>(selcx: &mut SelectionContext<'cx, 'tcx>,
     debug!("overlap: unification check succeeded");
 
     // Are any of the obligations unsatisfiable? If so, no overlap.
-    let infcx = selcx.infcx();
-    let opt_failing_obligation =
-        a_obligations.iter()
-                     .chain(&b_obligations)
-                     .map(|o| infcx.resolve_type_vars_if_possible(o))
-                     .find(|o| !selcx.evaluate_obligation(o));
+    let obligations = a_obligations.iter().chain(&b_obligations);
+
+    let mut opt_failing_obligation = None;
+
+    for o in obligations {
+        selcx.infcx().resolve_type_vars_if_possible(o);
+        if !selcx.evaluate_obligation(o) {
+            opt_failing_obligation = Some(o);
+            break;
+        }
+    }
 
     if let Some(failing_obligation) = opt_failing_obligation {
         debug!("overlap: obligation unsatisfiable {:?}", failing_obligation);
@@ -132,14 +141,13 @@ type SubstsFn = for<'a,'tcx> fn(infcx: &InferCtxt<'a, 'tcx>,
 
 /// Instantiate fresh variables for all bound parameters of the impl
 /// and return the impl trait ref with those variables substituted.
-fn impl_trait_ref_and_oblig<'a,'tcx>(selcx: &mut SelectionContext<'a,'tcx>,
-                                     impl_def_id: DefId,
-                                     substs_fn: SubstsFn)
-                                     -> (ty::TraitRef<'tcx>,
-                                         Vec<PredicateObligation<'tcx>>)
+fn impl_trait_ref_and_oblig<'cell,'infcx,'cx,'tcx>(selcx: &mut SelectionContext<'cell,'infcx,'cx,'tcx>,
+                                        impl_def_id: DefId,
+                                        substs_fn: SubstsFn)
+                                        -> (ty::TraitRef<'tcx>, Vec<PredicateObligation<'tcx>>)
 {
     let impl_substs =
-        &substs_fn(selcx.infcx(), DUMMY_SP, impl_def_id);
+        &substs_fn(*selcx.infcx(), DUMMY_SP, impl_def_id);
     let impl_trait_ref =
         selcx.tcx().impl_trait_ref(impl_def_id).unwrap();
     let impl_trait_ref =

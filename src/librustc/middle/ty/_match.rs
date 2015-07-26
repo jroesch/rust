@@ -8,9 +8,13 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
+use middle::infer::InferCtxt;
 use middle::ty::{self, Ty};
 use middle::ty::error::TypeError;
 use middle::ty::relate::{self, Relate, TypeRelation, RelateResult};
+
+use std::rc::Rc;
+use std::cell::{RefCell, RefMut};
 
 /// A type "A" *matches* "B" if the fresh types in B could be
 /// substituted with values so as to make it equal to A. Matching is
@@ -28,19 +32,27 @@ use middle::ty::relate::{self, Relate, TypeRelation, RelateResult};
 /// Like subtyping, matching is really a binary relation, so the only
 /// important thing about the result is Ok/Err. Also, matching never
 /// affects any type variables or unification state.
-pub struct Match<'a, 'tcx: 'a> {
-    tcx: &'a ty::ctxt<'tcx>
+pub struct Match<'infcx, 'a: 'infcx, 'tcx: 'a> {
+    infcx: Rc<RefCell<&'infcx mut InferCtxt<'a, 'tcx>>>
 }
 
-impl<'a, 'tcx> Match<'a, 'tcx> {
-    pub fn new(tcx: &'a ty::ctxt<'tcx>) -> Match<'a, 'tcx> {
-        Match { tcx: tcx }
+impl<'infcx,'a, 'tcx> Match<'infcx, 'a, 'tcx> {
+    pub fn new(infcx: &'infcx mut InferCtxt<'a, 'tcx>) -> Match<'infcx, 'a, 'tcx> {
+        Match { infcx: Rc::new(RefCell::new(infcx)) }
     }
 }
 
-impl<'a, 'tcx> TypeRelation<'a, 'tcx> for Match<'a, 'tcx> {
+impl<'infcx, 'a, 'tcx> TypeRelation<'infcx, 'a, 'tcx> for Match<'infcx, 'a, 'tcx> {
     fn tag(&self) -> &'static str { "Match" }
-    fn tcx(&self) -> &'a ty::ctxt<'tcx> { self.tcx }
+
+    fn tcx(&self) -> &'a ty::ctxt<'tcx> {
+        self.infcx.borrow().tcx
+    }
+
+    fn infcx(&self) -> RefMut<&'infcx mut InferCtxt<'a, 'tcx>> {
+        self.infcx.borrow_mut()
+    }
+
     fn a_is_expected(&self) -> bool { true } // irrelevant
 
     fn relate_with_variance<T:Relate<'a,'tcx>>(&mut self,

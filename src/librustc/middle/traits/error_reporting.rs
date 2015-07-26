@@ -55,14 +55,14 @@ impl<'tcx> TraitErrorKey<'tcx> {
     }
 }
 
-pub fn report_fulfillment_errors<'a, 'tcx>(infcx: &InferCtxt<'a, 'tcx>,
+pub fn report_fulfillment_errors<'a, 'tcx>(infcx: &mut InferCtxt<'a, 'tcx>,
                                            errors: &Vec<FulfillmentError<'tcx>>) {
     for error in errors {
         report_fulfillment_error(infcx, error);
     }
 }
 
-fn report_fulfillment_error<'a, 'tcx>(infcx: &InferCtxt<'a, 'tcx>,
+fn report_fulfillment_error<'a, 'tcx>(infcx: &mut InferCtxt<'a, 'tcx>,
                                       error: &FulfillmentError<'tcx>) {
     let error_key = TraitErrorKey::from_error(infcx, error);
     debug!("report_fulfillment_errors({:?}) - key={:?}",
@@ -84,7 +84,7 @@ fn report_fulfillment_error<'a, 'tcx>(infcx: &InferCtxt<'a, 'tcx>,
     }
 }
 
-pub fn report_projection_error<'a, 'tcx>(infcx: &InferCtxt<'a, 'tcx>,
+pub fn report_projection_error<'a, 'tcx>(infcx: &mut InferCtxt<'a, 'tcx>,
                                          obligation: &PredicateObligation<'tcx>,
                                          error: &MismatchedProjectionTypes<'tcx>)
 {
@@ -182,7 +182,7 @@ fn report_on_unimplemented<'a, 'tcx>(infcx: &InferCtxt<'a, 'tcx>,
 /// whose result could not be truly determined and thus we can't say
 /// if the program type checks or not -- and they are unusual
 /// occurrences in any case.
-pub fn report_overflow_error<'a, 'tcx, T>(infcx: &InferCtxt<'a, 'tcx>,
+pub fn report_overflow_error<'a, 'tcx, T>(infcx: &mut InferCtxt<'a, 'tcx>,
                                           obligation: &Obligation<'tcx, T>)
                                           -> !
     where T: fmt::Display + TypeFoldable<'tcx> + HasTypeFlags
@@ -202,7 +202,7 @@ pub fn report_overflow_error<'a, 'tcx, T>(infcx: &InferCtxt<'a, 'tcx>,
     unreachable!();
 }
 
-pub fn report_selection_error<'a, 'tcx>(infcx: &InferCtxt<'a, 'tcx>,
+pub fn report_selection_error<'a, 'tcx>(infcx: &mut InferCtxt<'a, 'tcx>,
                                         obligation: &PredicateObligation<'tcx>,
                                         error: &SelectionError<'tcx>)
 {
@@ -428,7 +428,7 @@ pub fn report_object_safety_error<'tcx>(tcx: &ty::ctxt<'tcx>,
     err
 }
 
-pub fn maybe_report_ambiguity<'a, 'tcx>(infcx: &InferCtxt<'a, 'tcx>,
+pub fn maybe_report_ambiguity<'a, 'tcx>(infcx: &mut InferCtxt<'a, 'tcx>,
                                         obligation: &PredicateObligation<'tcx>) {
     // Unable to successfully determine, probably means
     // insufficient type information, but could mean
@@ -520,7 +520,7 @@ fn need_type_info<'a, 'tcx>(infcx: &InferCtxt<'a, 'tcx>,
               ty);
 }
 
-fn note_obligation_cause<'a, 'tcx, T>(infcx: &InferCtxt<'a, 'tcx>,
+fn note_obligation_cause<'a, 'tcx, T>(infcx: &mut InferCtxt<'a, 'tcx>,
                                       err: &mut DiagnosticBuilder,
                                       obligation: &Obligation<'tcx, T>)
     where T: fmt::Display
@@ -532,7 +532,7 @@ fn note_obligation_cause<'a, 'tcx, T>(infcx: &InferCtxt<'a, 'tcx>,
                                &obligation.cause.code);
 }
 
-fn note_obligation_cause_code<'a, 'tcx, T>(infcx: &InferCtxt<'a, 'tcx>,
+fn note_obligation_cause_code<'a, 'tcx, T>(infcx: &mut InferCtxt<'a, 'tcx>,
                                            err: &mut DiagnosticBuilder,
                                            predicate: &T,
                                            cause_span: Span,

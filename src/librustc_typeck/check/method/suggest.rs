@@ -22,6 +22,7 @@ use middle::def;
 use middle::def_id::DefId;
 use middle::lang_items::FnOnceTraitLangItem;
 use middle::subst::Substs;
+use middle::transactional::Transactional;
 use middle::traits::{Obligation, SelectionContext};
 use util::nodemap::{FnvHashSet};
 
@@ -32,6 +33,7 @@ use rustc_front::print::pprust;
 use rustc_front::hir;
 
 use std::cell;
+use std::cell::RefCell;
 use std::cmp::Ordering;
 
 use super::{MethodError, NoMatchData, CandidateSource, impl_item, trait_item};
@@ -97,6 +99,19 @@ pub fn report_error<'a, 'tcx>(fcx: &FnCtxt<'a, 'tcx>,
 
                     // Determine if the field can be used as a function in some way
                     let field_ty = field.ty(cx, substs);
+                    if let Ok(fn_once_trait_did) = cx.lang_items.require(FnOnceTraitLangItem) {
+                        fcx.infcx().probe(|_, infcx| {
+                            let fn_once_substs = Substs::new_trait(vec![infcx.next_ty_var()],
+                                                                   Vec::new(),
+                                                                   field_ty);
+                            let trait_ref = ty::TraitRef::new(fn_once_trait_did,
+                                                              cx.mk_substs(fn_once_substs));
+                            let poly_trait_ref = trait_ref.to_poly_trait_ref();
+                            let obligation = Obligation::misc(span,
+                                                              fcx.body_id,
+                                                              poly_trait_ref.to_predicate());
+                            let cell = RefCell::new(infcx);
+                            let mut selcx = SelectionContext::new(&cell);
 
                     match field_ty.sty {
                         // Not all of these (e.g. unsafe fns) implement FnOnce

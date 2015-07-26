@@ -34,18 +34,19 @@ use middle::ty::{self, Ty, HasTypeFlags};
 use middle::ty::fold::TypeFoldable;
 use middle::ty::fold::TypeFolder;
 use std::collections::hash_map::{self, Entry};
+use std::cell::RefCell;
 
 use super::InferCtxt;
 use super::unify_key::ToType;
 
-pub struct TypeFreshener<'a, 'tcx:'a> {
-    infcx: &'a InferCtxt<'a, 'tcx>,
+pub struct TypeFreshener<'cell, 'infcx:'cell, 'a:'infcx, 'tcx:'a> {
+    infcx: &'cell RefCell<&'infcx mut InferCtxt<'a, 'tcx>>,
     freshen_count: u32,
     freshen_map: hash_map::HashMap<ty::InferTy, Ty<'tcx>>,
 }
 
-impl<'a, 'tcx> TypeFreshener<'a, 'tcx> {
-    pub fn new(infcx: &'a InferCtxt<'a, 'tcx>) -> TypeFreshener<'a, 'tcx> {
+impl<'cell, 'infcx, 'a, 'tcx> TypeFreshener<'cell, 'infcx, 'a, 'tcx> {
+    pub fn new(infcx: &'cell RefCell<&'infcx mut InferCtxt<'a, 'tcx>>) -> TypeFreshener<'cell, 'infcx, 'a, 'tcx> {
         TypeFreshener {
             infcx: infcx,
             freshen_count: 0,
@@ -70,7 +71,7 @@ impl<'a, 'tcx> TypeFreshener<'a, 'tcx> {
             Entry::Vacant(entry) => {
                 let index = self.freshen_count;
                 self.freshen_count += 1;
-                let t = self.infcx.tcx.mk_infer(freshener(index));
+                let t = self.infcx.borrow().tcx.mk_infer(freshener(index));
                 entry.insert(t);
                 t
             }
@@ -78,9 +79,9 @@ impl<'a, 'tcx> TypeFreshener<'a, 'tcx> {
     }
 }
 
-impl<'a, 'tcx> TypeFolder<'tcx> for TypeFreshener<'a, 'tcx> {
+impl<'cell, 'infcx, 'a, 'tcx> TypeFolder<'tcx> for TypeFreshener<'cell, 'infcx, 'a, 'tcx> {
     fn tcx<'b>(&'b self) -> &'b ty::ctxt<'tcx> {
-        self.infcx.tcx
+        self.infcx.borrow().tcx
     }
 
     fn fold_region(&mut self, r: ty::Region) -> ty::Region {
@@ -108,30 +109,37 @@ impl<'a, 'tcx> TypeFolder<'tcx> for TypeFreshener<'a, 'tcx> {
             return t;
         }
 
-        let tcx = self.infcx.tcx;
+        let tcx = self.infcx.borrow().tcx;
 
         match t.sty {
             ty::TyInfer(ty::TyVar(v)) => {
+                let infcx = self.infcx.borrow();
+                let ty = infcx.type_variables.borrow().probe(v);
                 self.freshen(
-                    self.infcx.type_variables.borrow().probe(v),
+                    ty,
                     ty::TyVar(v),
                     ty::FreshTy)
             }
 
             ty::TyInfer(ty::IntVar(v)) => {
+                let infcx = self.infcx.borrow();
+                let ty = infcx.int_unification_table
+                    .borrow_mut()
+                    .probe(v)
+                    .map(|v| v.to_type(tcx));
                 self.freshen(
-                    self.infcx.int_unification_table.borrow_mut()
-                                                    .probe(v)
-                                                    .map(|v| v.to_type(tcx)),
+                    ty,
                     ty::IntVar(v),
                     ty::FreshIntTy)
             }
 
             ty::TyInfer(ty::FloatVar(v)) => {
+                let infcx = self.infcx.borrow();
+                let ty = infcx.float_unification_table.borrow_mut()
+                    .probe(v)
+                    .map(|v| v.to_type(tcx));
                 self.freshen(
-                    self.infcx.float_unification_table.borrow_mut()
-                                                      .probe(v)
-                                                      .map(|v| v.to_type(tcx)),
+                    ty,
                     ty::FloatVar(v),
                     ty::FreshFloatTy)
             }
