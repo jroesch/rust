@@ -31,6 +31,7 @@ use syntax::ast::NodeId;
 use rustc_front::hir;
 use rustc_front::hir::Expr;
 use rustc_front::intravisit;
+use std::cell::RefCell;
 use rustc_front::intravisit::Visitor;
 
 use self::restrictions::RestrictionResult;
@@ -57,7 +58,8 @@ pub fn gather_loans_in_fn<'a, 'tcx>(bccx: &BorrowckCtxt<'a, 'tcx>,
     let param_env = ty::ParameterEnvironment::for_item(bccx.tcx, fn_id);
     let infcx = InferCtxt::new(bccx.tcx, &bccx.tcx.tables, Some(param_env));
     {
-        let mut euv = euv::ExprUseVisitor::new(&mut glcx, &infcx);
+        let cell = RefCell::new(infcx);
+        let mut euv = euv::ExprUseVisitor::new(&mut glcx, &cell);
         euv.walk_fn(decl, body);
     }
 
@@ -526,7 +528,8 @@ impl<'a, 'tcx, 'v> Visitor<'v> for StaticInitializerCtxt<'a, 'tcx> {
     fn visit_expr(&mut self, ex: &Expr) {
         if let hir::ExprAddrOf(mutbl, ref base) = ex.node {
             let infcx = InferCtxt::new(self.bccx.tcx, &self.bccx.tcx.tables, None);
-            let mc = mc::MemCategorizationContext::new(&infcx);
+            let cell = RefCell::new(infcx);
+            let mc = mc::MemCategorizationContext::new(&cell);
             let base_cmt = mc.cat_expr(&**base).unwrap();
             let borrow_kind = ty::BorrowKind::from_mutbl(mutbl);
             // Check that we don't allow borrows of unsafe static items.

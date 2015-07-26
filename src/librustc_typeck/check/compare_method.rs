@@ -11,6 +11,7 @@
 use middle::free_region::FreeRegionMap;
 use middle::infer::{self, TypeOrigin, InferCtxt};
 use middle::traits;
+use middle::transactional::Transactional;
 use middle::ty::{self};
 use middle::subst::{self, Subst, Substs, VecPerParamSpace};
 
@@ -43,7 +44,6 @@ pub fn compare_impl_method<'tcx>(tcx: &ty::ctxt<'tcx>,
            impl_trait_ref);
 
     let mut infcx = InferCtxt::new(tcx, &tcx.tables, None);
-    let mut fulfillment_cx = infcx.fulfillment_cx.borrow_mut();
 
     let trait_to_impl_substs = &impl_trait_ref.substs;
 
@@ -245,7 +245,8 @@ pub fn compare_impl_method<'tcx>(tcx: &ty::ctxt<'tcx>,
     debug!("compare_impl_method: trait_bounds={:?}",
         infcx.parameter_environment.caller_bounds);
 
-    let mut selcx = traits::SelectionContext::new(&infcx);
+    let cell = panic!();
+    let mut selcx = traits::SelectionContext::new(&cell);
 
     for predicate in impl_pred.fns {
         let traits::Normalized { value: predicate, .. } =
@@ -257,8 +258,7 @@ pub fn compare_impl_method<'tcx>(tcx: &ty::ctxt<'tcx>,
             code: traits::ObligationCauseCode::CompareImplMethodObligation
         };
 
-        fulfillment_cx.register_predicate_obligation(
-            &infcx,
+        infcx.register_predicate_obligation(
             traits::Obligation::new(cause, predicate));
     }
 
@@ -281,7 +281,7 @@ pub fn compare_impl_method<'tcx>(tcx: &ty::ctxt<'tcx>,
     let trait_fty = tcx.mk_fn(None, tcx.mk_bare_fn(trait_m.fty.clone()));
     let trait_fty = trait_fty.subst(tcx, &trait_to_skol_substs);
 
-    let err = infcx.commit_if_ok(|snapshot| {
+    let err = infcx.commit_if_ok(|snapshot, infcx| {
         let origin = TypeOrigin::MethodCompatCheck(impl_m_span);
 
         let (impl_sig, _) =
@@ -291,8 +291,7 @@ pub fn compare_impl_method<'tcx>(tcx: &ty::ctxt<'tcx>,
         let impl_sig =
             impl_sig.subst(tcx, impl_to_skol_substs);
         let impl_sig =
-            assoc::normalize_associated_types_in(&infcx,
-                                                 &mut fulfillment_cx,
+            assoc::normalize_associated_types_in(infcx,
                                                  impl_m_span,
                                                  impl_m_body_id,
                                                  &impl_sig);
@@ -309,8 +308,7 @@ pub fn compare_impl_method<'tcx>(tcx: &ty::ctxt<'tcx>,
         let trait_sig =
             trait_sig.subst(tcx, &trait_to_skol_substs);
         let trait_sig =
-            assoc::normalize_associated_types_in(&infcx,
-                                                 &mut fulfillment_cx,
+            assoc::normalize_associated_types_in(infcx,
                                                  impl_m_span,
                                                  impl_m_body_id,
                                                  &trait_sig);
@@ -344,8 +342,8 @@ pub fn compare_impl_method<'tcx>(tcx: &ty::ctxt<'tcx>,
 
     // Check that all obligations are satisfied by the implementation's
     // version.
-    match fulfillment_cx.select_all_or_error(&infcx) {
-        Err(ref errors) => { traits::report_fulfillment_errors(&infcx, errors) }
+    match infcx.select_all_or_error() {
+        Err(ref errors) => { traits::report_fulfillment_errors(&mut infcx, errors) }
         Ok(_) => {}
     }
 
@@ -416,8 +414,7 @@ pub fn compare_const_impl<'tcx>(tcx: &ty::ctxt<'tcx>,
     debug!("compare_const_impl(impl_trait_ref={:?})",
            impl_trait_ref);
 
-    let infcx = InferCtxt::new(tcx, &tcx.tables, None);
-    let mut fulfillment_cx = infcx.fulfillment_cx.borrow_mut();
+    let mut infcx = InferCtxt::new(tcx, &tcx.tables, None);
 
     // The below is for the most part highly similar to the procedure
     // for methods above. It is simpler in many respects, especially
@@ -447,13 +444,12 @@ pub fn compare_const_impl<'tcx>(tcx: &ty::ctxt<'tcx>,
     let impl_ty = impl_c.ty.subst(tcx, impl_to_skol_substs);
     let trait_ty = trait_c.ty.subst(tcx, &trait_to_skol_substs);
 
-    let err = infcx.commit_if_ok(|_| {
+    let err = infcx.commit_if_ok(|_, infcx| {
         let origin = TypeOrigin::Misc(impl_c_span);
 
         // There is no "body" here, so just pass dummy id.
         let impl_ty =
-            assoc::normalize_associated_types_in(&infcx,
-                                                 &mut fulfillment_cx,
+            assoc::normalize_associated_types_in(infcx,
                                                  impl_c_span,
                                                  0,
                                                  &impl_ty);
@@ -462,8 +458,7 @@ pub fn compare_const_impl<'tcx>(tcx: &ty::ctxt<'tcx>,
                impl_ty);
 
         let trait_ty =
-            assoc::normalize_associated_types_in(&infcx,
-                                                 &mut fulfillment_cx,
+            assoc::normalize_associated_types_in(infcx,
                                                  impl_c_span,
                                                  0,
                                                  &trait_ty);

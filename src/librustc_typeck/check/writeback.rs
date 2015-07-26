@@ -36,7 +36,7 @@ use rustc_front::hir;
 ///////////////////////////////////////////////////////////////////////////
 // Entry point functions
 
-pub fn resolve_type_vars_in_expr(fcx: &FnCtxt, e: &hir::Expr) {
+pub fn resolve_type_vars_in_expr<'cx, 'tcx: 'cx>(fcx: &FnCtxt<'cx, 'tcx>, e: &hir::Expr) {
     assert_eq!(fcx.writeback_errors.get(), false);
     let mut wbcx = WritebackCx::new(fcx);
     wbcx.visit_expr(e);
@@ -45,9 +45,9 @@ pub fn resolve_type_vars_in_expr(fcx: &FnCtxt, e: &hir::Expr) {
     wbcx.visit_liberated_fn_sigs();
 }
 
-pub fn resolve_type_vars_in_fn(fcx: &FnCtxt,
-                               decl: &hir::FnDecl,
-                               blk: &hir::Block) {
+pub fn resolve_type_vars_in_fn<'cx, 'tcx: 'cx>(fcx: &FnCtxt<'cx, 'tcx>,
+                                               decl: &hir::FnDecl,
+                                               blk: &hir::Block) {
     assert_eq!(fcx.writeback_errors.get(), false);
     let mut wbcx = WritebackCx::new(fcx);
     wbcx.visit_block(blk);
@@ -74,16 +74,16 @@ pub fn resolve_type_vars_in_fn(fcx: &FnCtxt,
 // there, it applies a few ad-hoc checks that were not convenient to
 // do elsewhere.
 
-struct WritebackCx<'cx, 'tcx: 'cx> {
-    fcx: &'cx FnCtxt<'cx, 'tcx>,
+struct WritebackCx<'a, 'cx: 'a, 'tcx: 'cx> {
+    fcx: &'a FnCtxt<'cx, 'tcx>,
 }
 
-impl<'cx, 'tcx> WritebackCx<'cx, 'tcx> {
-    fn new(fcx: &'cx FnCtxt<'cx, 'tcx>) -> WritebackCx<'cx, 'tcx> {
+impl<'a, 'cx, 'tcx> WritebackCx<'a, 'cx, 'tcx> {
+    fn new(fcx: &'a FnCtxt<'cx, 'tcx>) -> WritebackCx<'a, 'cx, 'tcx> {
         WritebackCx { fcx: fcx }
     }
 
-    fn tcx(&self) -> &'cx ty::ctxt<'tcx> {
+    fn tcx(&self) -> &'a ty::ctxt<'tcx> {
         self.fcx.tcx()
     }
 
@@ -153,7 +153,7 @@ impl<'cx, 'tcx> WritebackCx<'cx, 'tcx> {
 // below. In general, a function is made into a `visitor` if it must
 // traffic in node-ids or update tables in the type context etc.
 
-impl<'cx, 'tcx, 'v> Visitor<'v> for WritebackCx<'cx, 'tcx> {
+impl<'a, 'cx, 'tcx, 'v> Visitor<'v> for WritebackCx<'a, 'cx, 'tcx> {
     fn visit_stmt(&mut self, s: &hir::Stmt) {
         if self.fcx.writeback_errors.get() {
             return;
@@ -233,7 +233,7 @@ impl<'cx, 'tcx, 'v> Visitor<'v> for WritebackCx<'cx, 'tcx> {
     }
 }
 
-impl<'cx, 'tcx> WritebackCx<'cx, 'tcx> {
+impl<'a, 'cx, 'tcx> WritebackCx<'a, 'cx, 'tcx> {
     fn visit_upvar_borrow_map(&self) {
         if self.fcx.writeback_errors.get() {
             return;
@@ -412,25 +412,26 @@ impl ResolveReason {
 // The Resolver. This is the type folding engine that detects
 // unresolved types and so forth.
 
-struct Resolver<'cx, 'tcx: 'cx> {
+struct Resolver<'a, 'cx: 'a, 'tcx: 'cx> {
     tcx: &'cx ty::ctxt<'tcx>,
-    infcx: &'cx infer::InferCtxt<'cx, 'tcx>,
+    infcx: &'a mut infer::InferCtxt<'cx, 'tcx>,
     writeback_errors: &'cx Cell<bool>,
     reason: ResolveReason,
 }
 
-impl<'cx, 'tcx> Resolver<'cx, 'tcx> {
-    fn new(fcx: &'cx FnCtxt<'cx, 'tcx>,
+impl<'a, 'cx, 'tcx> Resolver<'a, 'cx, 'tcx> {
+    fn new(fcx: &'a FnCtxt<'cx, 'tcx>,
            reason: ResolveReason)
-           -> Resolver<'cx, 'tcx>
+           -> Resolver<'a, 'cx, 'tcx>
     {
-        Resolver::from_infcx(fcx.infcx(), &fcx.writeback_errors, reason)
+        //Resolver::from_infcx(&mut fcx.infcx(), &fcx.writeback_errors, reason)
+        panic!()
     }
 
-    fn from_infcx(infcx: &'cx infer::InferCtxt<'cx, 'tcx>,
+    fn from_infcx(infcx: &'a mut infer::InferCtxt<'cx, 'tcx>,
                   writeback_errors: &'cx Cell<bool>,
                   reason: ResolveReason)
-                  -> Resolver<'cx, 'tcx>
+                  -> Resolver<'a, 'cx, 'tcx>
     {
         Resolver { infcx: infcx,
                    tcx: infcx.tcx,
@@ -488,8 +489,8 @@ impl<'cx, 'tcx> Resolver<'cx, 'tcx> {
     }
 }
 
-impl<'cx, 'tcx> TypeFolder<'tcx> for Resolver<'cx, 'tcx> {
-    fn tcx<'a>(&'a self) -> &'a ty::ctxt<'tcx> {
+impl<'a, 'cx, 'tcx> TypeFolder<'tcx> for Resolver<'a, 'cx, 'tcx> {
+    fn tcx<'r>(&'r self) -> &'r ty::ctxt<'tcx> {
         self.tcx
     }
 

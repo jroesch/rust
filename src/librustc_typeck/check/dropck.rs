@@ -13,7 +13,7 @@ use check::regionck::{self, Rcx};
 use middle::def_id::DefId;
 use middle::infer::{self, InferCtxt};
 use middle::free_region::FreeRegionMap;
-use middle::infer;
+use middle::transactional::Transactional;
 use middle::region;
 use middle::subst::{self, Subst};
 use middle::traits;
@@ -84,21 +84,18 @@ fn ensure_drop_params_and_item_params_correspond<'tcx>(
     // check that the impl type can be made to match the trait type.
 
     let impl_param_env = ty::ParameterEnvironment::for_item(tcx, self_type_node_id);
-    let infcx = infer::new_infer_ctxt(tcx, &tcx.tables, Some(impl_param_env));
+    let mut infcx = InferCtxt::new(tcx, &tcx.tables, Some(impl_param_env));
 
     let named_type = tcx.lookup_item_type(self_type_did).ty;
     let named_type = named_type.subst(tcx, &infcx.parameter_environment.free_substs);
 
     let drop_impl_span = tcx.map.def_id_span(drop_impl_did, codemap::DUMMY_SP);
-                                      named_type_skolem, drop_unifier) {
-            // Even if we did manage to equate the types, the process
-            // may have just gathered unsolvable region constraints
     let fresh_impl_substs =
         infcx.fresh_substs_for_generics(drop_impl_span, drop_impl_generics);
     let fresh_impl_self_ty = drop_impl_ty.subst(tcx, &fresh_impl_substs);
 
-    if let Err(_) = infer::mk_eqty(&infcx, true, infer::TypeOrigin::Misc(drop_impl_span),
-                                   named_type, fresh_impl_self_ty) {
+    if let Err(_) = infcx.mk_eqty(true, infer::TypeOrigin::Misc(drop_impl_span),
+                                  named_type, fresh_impl_self_ty) {
         let item_span = tcx.map.span(self_type_node_id);
         struct_span_err!(tcx.sess, drop_impl_span, E0366,
                          "Implementations of Drop cannot be specialized")
@@ -109,9 +106,9 @@ fn ensure_drop_params_and_item_params_correspond<'tcx>(
         return Err(());
     }
 
-    if let Err(ref errors) = infcx.fulfillment_cx.borrow_mut().select_all_or_error(&infcx) {
+    if let Err(ref errors) = infcx.select_all_or_error() {
         // this could be reached when we get lazy normalization
-        traits::report_fulfillment_errors(&infcx, errors);
+        traits::report_fulfillment_errors(&mut infcx, errors);
         return Err(());
     }
 
@@ -269,10 +266,10 @@ fn ensure_drop_predicates_are_implied_by_item_defn<'tcx>(
 /// ensuring that they do not access data nor invoke methods of
 /// values that have been previously dropped).
 ///
-pub fn check_safety_of_destructor_if_necessary<'a, 'tcx>(rcx: &mut Rcx<'a, 'tcx>,
-                                                         typ: ty::Ty<'tcx>,
-                                                         span: Span,
-                                                         scope: region::CodeExtent) {
+pub fn check_safety_of_destructor_if_necessary<'infcx, 'a, 'tcx>(rcx: &mut Rcx<'infcx, 'a, 'tcx>,
+                                                                 typ: ty::Ty<'tcx>,
+                                                                 span: Span,
+                                                                 scope: region::CodeExtent) {
     debug!("check_safety_of_destructor_if_necessary typ: {:?} scope: {:?}",
            typ, scope);
 
@@ -345,8 +342,8 @@ enum TypeContext {
     }
 }
 
-struct DropckContext<'a, 'b: 'a, 'tcx: 'b> {
-    rcx: &'a mut Rcx<'b, 'tcx>,
+struct DropckContext<'dcx, 'infcx:'dcx, 'cx: 'infcx, 'tcx: 'cx> {
+    rcx: &'dcx mut Rcx<'infcx, 'cx, 'tcx>,
     /// types that have already been traversed
     breadcrumbs: FnvHashSet<Ty<'tcx>>,
     /// span for error reporting
@@ -356,8 +353,8 @@ struct DropckContext<'a, 'b: 'a, 'tcx: 'b> {
 }
 
 // `context` is used for reporting overflow errors
-fn iterate_over_potentially_unsafe_regions_in_type<'a, 'b, 'tcx>(
-    cx: &mut DropckContext<'a, 'b, 'tcx>,
+fn iterate_over_potentially_unsafe_regions_in_type<'dcx, 'a, 'b, 'tcx>(
+    cx: &mut DropckContext<'dcx, 'a, 'b, 'tcx>,
     context: TypeContext,
     ty: Ty<'tcx>,
     depth: usize) -> Result<(), Error<'tcx>>

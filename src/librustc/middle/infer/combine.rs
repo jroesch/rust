@@ -37,10 +37,12 @@ use super::equate::Equate;
 use super::glb::Glb;
 use super::lub::Lub;
 use super::sub::Sub;
-use super::{InferCtxt};
+use super::{InferCtxt, CombinedSnapshot};
 use super::{MiscVariable, TypeTrace};
 use super::type_variable::{RelationDir, BiTo, EqTo, SubtypeOf, SupertypeOf};
 
+use middle::transactional::Transactional;
+use middle::ty::{TyVar};
 use middle::ty::{IntType, UintType};
 use middle::ty::{self, Ty};
 use middle::ty::error::TypeError;
@@ -50,26 +52,31 @@ use middle::ty::relate::{Relate, RelateResult, TypeRelation};
 use syntax::ast;
 use syntax::codemap::Span;
 
+use std::cell::RefCell;
+use std::rc::Rc;
+
 #[derive(Clone)]
-pub struct CombineFields<'a, 'tcx: 'a> {
-    pub infcx: &'a InferCtxt<'a, 'tcx>,
+pub struct CombineFields<'infcx, 'a: 'infcx, 'tcx: 'a> {
+    // this is kind of hack for the time being, would like
+    // to discuss better refactors
+    pub infcx: Rc<RefCell<&'infcx mut InferCtxt<'a, 'tcx>>>,
     pub a_is_expected: bool,
     pub trace: TypeTrace<'tcx>,
     pub cause: Option<ty::relate::Cause>,
 }
 
-pub fn super_combine_tys<'a,'tcx:'a,R>(infcx: &InferCtxt<'a, 'tcx>,
-                                       relation: &mut R,
+pub fn super_combine_tys<'infcx,'a:'infcx,'tcx:'a,R>(relation: &mut R,
                                        a: Ty<'tcx>,
                                        b: Ty<'tcx>)
                                        -> RelateResult<'tcx, Ty<'tcx>>
-    where R: TypeRelation<'a,'tcx>
+    where R: TypeRelation<'infcx,'a,'tcx> 
 {
     let a_is_expected = relation.a_is_expected();
 
     match (&a.sty, &b.sty) {
         // Relate integral variables to other types
         (&ty::TyInfer(ty::IntVar(a_id)), &ty::TyInfer(ty::IntVar(b_id))) => {
+            let infcx = relation.infcx();
             try!(infcx.int_unification_table
                       .borrow_mut()
                       .unify_var_var(a_id, b_id)
@@ -77,31 +84,47 @@ pub fn super_combine_tys<'a,'tcx:'a,R>(infcx: &InferCtxt<'a, 'tcx>,
             Ok(a)
         }
         (&ty::TyInfer(ty::IntVar(v_id)), &ty::TyInt(v)) => {
-            unify_integral_variable(infcx, a_is_expected, v_id, IntType(v))
+            unify_integral_variable(
+                *relation.infcx(),
+                a_is_expected,
+                v_id,
+                IntType(v))
         }
         (&ty::TyInt(v), &ty::TyInfer(ty::IntVar(v_id))) => {
-            unify_integral_variable(infcx, !a_is_expected, v_id, IntType(v))
+            unify_integral_variable(
+                *relation.infcx(),
+                !a_is_expected,
+                v_id, IntType(v))
         }
         (&ty::TyInfer(ty::IntVar(v_id)), &ty::TyUint(v)) => {
-            unify_integral_variable(infcx, a_is_expected, v_id, UintType(v))
+            unify_integral_variable(
+                *relation.infcx(),
+                a_is_expected,
+                v_id, UintType(v))
         }
         (&ty::TyUint(v), &ty::TyInfer(ty::IntVar(v_id))) => {
-            unify_integral_variable(infcx, !a_is_expected, v_id, UintType(v))
+            unify_integral_variable(
+                *relation.infcx(),
+                !a_is_expected,
+                v_id, UintType(v))
         }
 
         // Relate floating-point variables to other types
         (&ty::TyInfer(ty::FloatVar(a_id)), &ty::TyInfer(ty::FloatVar(b_id))) => {
-            try!(infcx.float_unification_table
-                      .borrow_mut()
-                      .unify_var_var(a_id, b_id)
-                      .map_err(|e| float_unification_error(relation.a_is_expected(), e)));
+            let infcx = relation.infcx();
+
+            try!(infcx
+                 .float_unification_table
+                 .borrow_mut()
+                 .unify_var_var(a_id, b_id)
+                 .map_err(|e| float_unification_error(relation.a_is_expected(), e)));
             Ok(a)
         }
         (&ty::TyInfer(ty::FloatVar(v_id)), &ty::TyFloat(v)) => {
-            unify_float_variable(infcx, a_is_expected, v_id, v)
+            unify_float_variable(*relation.infcx(), a_is_expected, v_id, v)
         }
         (&ty::TyFloat(v), &ty::TyInfer(ty::FloatVar(v_id))) => {
-            unify_float_variable(infcx, !a_is_expected, v_id, v)
+            unify_float_variable(*relation.infcx(), !a_is_expected, v_id, v)
         }
 
         // All other cases of inference are errors
@@ -148,39 +171,39 @@ fn unify_float_variable<'a,'tcx>(infcx: &InferCtxt<'a,'tcx>,
     Ok(infcx.tcx.mk_mach_float(val))
 }
 
-impl<'a, 'tcx> CombineFields<'a, 'tcx> {
+impl<'infcx, 'a, 'tcx> CombineFields<'infcx, 'a, 'tcx> {
     pub fn tcx(&self) -> &'a ty::ctxt<'tcx> {
-        self.infcx.tcx
+        self.infcx.borrow().tcx
     }
 
-    pub fn switch_expected(&self) -> CombineFields<'a, 'tcx> {
+    pub fn switch_expected(&self) -> CombineFields<'infcx, 'a, 'tcx> {
         CombineFields {
             a_is_expected: !self.a_is_expected,
             ..(*self).clone()
         }
     }
 
-    pub fn equate(&self) -> Equate<'a, 'tcx> {
+    pub fn equate(&self) -> Equate<'infcx, 'a, 'tcx> {
         Equate::new(self.clone())
     }
 
-    pub fn bivariate(&self) -> Bivariate<'a, 'tcx> {
+    pub fn bivariate(&self) -> Bivariate<'infcx, 'a, 'tcx> {
         Bivariate::new(self.clone())
     }
 
-    pub fn sub(&self) -> Sub<'a, 'tcx> {
+    pub fn sub(&self) -> Sub<'infcx, 'a, 'tcx> {
         Sub::new(self.clone())
     }
 
-    pub fn lub(&self) -> Lub<'a, 'tcx> {
+    pub fn lub(&self) -> Lub<'infcx, 'a, 'tcx> {
         Lub::new(self.clone())
     }
 
-    pub fn glb(&self) -> Glb<'a, 'tcx> {
+    pub fn glb(&self) -> Glb<'infcx, 'a, 'tcx> {
         Glb::new(self.clone())
     }
 
-    pub fn instantiate(&self,
+    pub fn instantiate(&mut self,
                        a_ty: Ty<'tcx>,
                        dir: RelationDir,
                        b_vid: ty::TyVid)
@@ -219,7 +242,8 @@ impl<'a, 'tcx> CombineFields<'a, 'tcx> {
             // Check whether `vid` has been instantiated yet.  If not,
             // make a generalized form of `ty` and instantiate with
             // that.
-            let b_ty = self.infcx.type_variables.borrow().probe(b_vid);
+            let infcx = self.infcx.borrow_mut();
+            let b_ty = infcx.type_variables.borrow().probe(b_vid);
             let b_ty = match b_ty {
                 Some(t) => t, // ...already instantiated.
                 None => {     // ...not yet instantiated:
@@ -232,7 +256,7 @@ impl<'a, 'tcx> CombineFields<'a, 'tcx> {
                                         b_vid={:?}, generalized_ty={:?})",
                            a_ty, dir, b_vid,
                            generalized_ty);
-                    self.infcx.type_variables
+                    infcx.type_variables
                         .borrow_mut()
                         .instantiate_and_push(
                             b_vid, generalized_ty, &mut stack);
@@ -269,7 +293,7 @@ impl<'a, 'tcx> CombineFields<'a, 'tcx> {
                   -> RelateResult<'tcx, Ty<'tcx>>
     {
         let mut generalize = Generalizer {
-            infcx: self.infcx,
+            infcx: &self.infcx.borrow(),
             span: self.trace.origin.span(),
             for_vid: for_vid,
             make_region_vars: make_region_vars,
@@ -392,4 +416,20 @@ fn float_unification_error<'tcx>(a_is_expected: bool,
 {
     let (a, b) = v;
     TypeError::FloatMismatch(ty::relate::expected_found_bool(a_is_expected, &a, &b))
+}
+
+impl<'infcx, 'a, 'tcx> Transactional for CombineFields<'infcx, 'a, 'tcx> {
+    type Snapshot = CombinedSnapshot;
+
+    fn start_snapshot(&mut self) -> CombinedSnapshot {
+        self.infcx.borrow_mut().start_snapshot()
+    }
+
+    fn rollback_to(&mut self, cause: &str, snapshot: CombinedSnapshot) {
+        self.infcx.borrow_mut().rollback_to(cause, snapshot)
+    }
+
+    fn commit_from(&mut self, snapshot: CombinedSnapshot) {
+        self.infcx.borrow_mut().commit_from(snapshot);
+    }
 }

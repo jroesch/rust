@@ -109,7 +109,7 @@ pub fn declare_rust_fn<'a, 'tcx>(ccx: &CrateContext<'a, 'tcx>, name: &str,
         ty::TyBareFn(_, ref f) => {
             (&f.sig, f.abi, None)
         }
-        ty::TyClosure(closure_did, substs) => {
+        ty::TyClosure(closure_did, ref substs) => {
             let infcx = InferCtxt::normalizing(ccx.tcx(), &ccx.tcx().tables);
             function_type = infcx.closure_type(closure_did, substs);
             let self_type = base::self_type_for_closure(ccx, closure_did, fn_type);

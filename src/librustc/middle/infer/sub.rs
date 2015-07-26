@@ -9,6 +9,7 @@
 // except according to those terms.
 
 use super::combine::{self, CombineFields};
+use super::InferCtxt;
 use super::higher_ranked::HigherRankedRelations;
 use super::SubregionOrigin;
 use super::type_variable::{SubtypeOf, SupertypeOf};
@@ -17,21 +18,30 @@ use middle::ty::{self, Ty};
 use middle::ty::TyVar;
 use middle::ty::relate::{Cause, Relate, RelateResult, TypeRelation};
 use std::mem;
+use std::cell::{RefMut};
 
 /// Ensures `a` is made a subtype of `b`. Returns `a` on success.
-pub struct Sub<'a, 'tcx: 'a> {
-    fields: CombineFields<'a, 'tcx>,
+pub struct Sub<'infcx, 'a: 'infcx, 'tcx: 'a> {
+    fields: CombineFields<'infcx, 'a, 'tcx>,
 }
 
-impl<'a, 'tcx> Sub<'a, 'tcx> {
-    pub fn new(f: CombineFields<'a, 'tcx>) -> Sub<'a, 'tcx> {
+impl<'infcx, 'a, 'tcx> Sub<'infcx, 'a, 'tcx> {
+    pub fn new(f: CombineFields<'infcx, 'a, 'tcx>) -> Sub<'infcx, 'a, 'tcx> {
         Sub { fields: f }
     }
 }
 
-impl<'a, 'tcx> TypeRelation<'a, 'tcx> for Sub<'a, 'tcx> {
+impl<'infcx, 'a, 'tcx> TypeRelation<'infcx, 'a, 'tcx> for Sub<'infcx, 'a, 'tcx> {
     fn tag(&self) -> &'static str { "Sub" }
-    fn tcx(&self) -> &'a ty::ctxt<'tcx> { self.fields.infcx.tcx }
+
+    fn tcx(&self) -> &'a ty::ctxt<'tcx> {
+        self.fields.infcx.borrow().tcx
+    }
+
+    fn infcx(&self) -> RefMut<&'infcx mut InferCtxt<'a, 'tcx>> {
+        self.fields.infcx.borrow_mut()
+    }
+
     fn a_is_expected(&self) -> bool { self.fields.a_is_expected }
 
     fn with_cause<F,R>(&mut self, cause: Cause, f: F) -> R
@@ -64,14 +74,28 @@ impl<'a, 'tcx> TypeRelation<'a, 'tcx> for Sub<'a, 'tcx> {
 
         if a == b { return Ok(a); }
 
-        let infcx = self.fields.infcx;
-        let a = infcx.type_variables.borrow().replace_if_possible(a);
-        let b = infcx.type_variables.borrow().replace_if_possible(b);
+        let (a, b) = {
+            let infcx = self.fields.infcx.borrow_mut();
+
+            let a = infcx
+                .type_variables
+                .borrow()
+                .replace_if_possible(a);
+
+            let b = infcx
+                .type_variables
+                .borrow()
+                .replace_if_possible(b);
+
+            (a, b)
+        };
+
         match (&a.sty, &b.sty) {
             (&ty::TyInfer(TyVar(a_id)), &ty::TyInfer(TyVar(b_id))) => {
+                let infcx = self.fields.infcx.borrow_mut();
                 infcx.type_variables
-                    .borrow_mut()
-                    .relate_vars(a_id, SubtypeOf, b_id);
+                     .borrow_mut()
+                     .relate_vars(a_id, SubtypeOf, b_id);
                 Ok(a)
             }
             (&ty::TyInfer(TyVar(a_id)), _) => {
@@ -103,7 +127,7 @@ impl<'a, 'tcx> TypeRelation<'a, 'tcx> for Sub<'a, 'tcx> {
         // from the "cause" field, we could perhaps give more tailored
         // error messages.
         let origin = SubregionOrigin::Subtype(self.fields.trace.clone());
-        self.fields.infcx.region_vars.make_subregion(origin, a, b);
+        self.fields.infcx.borrow_mut().region_vars.make_subregion(origin, a, b);
         Ok(a)
     }
 

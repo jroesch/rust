@@ -30,25 +30,23 @@
 //! a lattice.
 
 use super::combine;
-use super::InferCtxt;
 
 use middle::ty::TyVar;
 use middle::ty::{self, Ty};
 use middle::ty::relate::{RelateResult, TypeRelation};
 
-pub trait LatticeDir<'f,'tcx> : TypeRelation<'f,'tcx> {
-    fn infcx(&self) -> &'f InferCtxt<'f, 'tcx>;
-
+pub trait LatticeDir<'infcx,'f,'tcx> : TypeRelation<'infcx, 'f,'tcx> {
     // Relates the type `v` to `a` and `b` such that `v` represents
     // the LUB/GLB of `a` and `b` as appropriate.
     fn relate_bound(&self, v: Ty<'tcx>, a: Ty<'tcx>, b: Ty<'tcx>) -> RelateResult<'tcx, ()>;
 }
 
-pub fn super_lattice_tys<'a,'tcx,L:LatticeDir<'a,'tcx>>(this: &mut L,
-                                                        a: Ty<'tcx>,
-                                                        b: Ty<'tcx>)
-                                                        -> RelateResult<'tcx, Ty<'tcx>>
-    where 'tcx: 'a
+pub fn super_lattice_tys<'infcx, 'a,'tcx,L:LatticeDir<'infcx,'a,'tcx>>(
+    this: &mut L,
+    a: Ty<'tcx>,
+    b: Ty<'tcx>)
+    -> RelateResult<'tcx, Ty<'tcx>>
+    where 'a: 'infcx, 'tcx: 'a
 {
     debug!("{}.lattice_tys({:?}, {:?})",
            this.tag(),
@@ -59,26 +57,31 @@ pub fn super_lattice_tys<'a,'tcx,L:LatticeDir<'a,'tcx>>(this: &mut L,
         return Ok(a);
     }
 
-    let infcx = this.infcx();
-    let a = infcx.type_variables.borrow().replace_if_possible(a);
-    let b = infcx.type_variables.borrow().replace_if_possible(b);
+    let (a, b) = {
+        let infcx = this.infcx();
+        let a = infcx.type_variables.borrow().replace_if_possible(a);
+        let b = infcx.type_variables.borrow().replace_if_possible(b);
+        (a, b)
+    };
+
     match (&a.sty, &b.sty) {
         (&ty::TyInfer(TyVar(..)), &ty::TyInfer(TyVar(..)))
-            if infcx.type_var_diverges(a) && infcx.type_var_diverges(b) => {
-            let v = infcx.next_diverging_ty_var();
+            if this.infcx().type_var_diverges(a) &&
+               this.infcx().type_var_diverges(b) => {
+            let v = this.infcx().next_diverging_ty_var();
             try!(this.relate_bound(v, a, b));
             Ok(v)
         }
 
         (&ty::TyInfer(TyVar(..)), _) |
         (_, &ty::TyInfer(TyVar(..))) => {
-            let v = infcx.next_ty_var();
+            let v = this.infcx().next_ty_var();
             try!(this.relate_bound(v, a, b));
             Ok(v)
         }
 
         _ => {
-            combine::super_combine_tys(this.infcx(), this, a, b)
+            combine::super_combine_tys(this, a, b)
         }
     }
 }

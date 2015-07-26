@@ -25,7 +25,7 @@ use util::common::ErrorReported;
 /// inference variable, returns `None`, because we are not able to
 /// make any progress at all. This is to prevent "livelock" where we
 /// say "$0 is WF if $0 is WF".
-pub fn obligations<'a,'tcx>(infcx: &InferCtxt<'a, 'tcx>,
+pub fn obligations<'a,'tcx>(infcx: &mut InferCtxt<'a, 'tcx>,
                             body_id: ast::NodeId,
                             ty: Ty<'tcx>,
                             span: Span)
@@ -49,7 +49,7 @@ pub fn obligations<'a,'tcx>(infcx: &InferCtxt<'a, 'tcx>,
 /// well-formed.  For example, if there is a trait `Set` defined like
 /// `trait Set<K:Eq>`, then the trait reference `Foo: Set<Bar>` is WF
 /// if `Bar: Eq`.
-pub fn trait_obligations<'a,'tcx>(infcx: &InferCtxt<'a, 'tcx>,
+pub fn trait_obligations<'a,'tcx>(infcx: &mut InferCtxt<'a, 'tcx>,
                                   body_id: ast::NodeId,
                                   trait_ref: &ty::TraitRef<'tcx>,
                                   span: Span)
@@ -60,7 +60,7 @@ pub fn trait_obligations<'a,'tcx>(infcx: &InferCtxt<'a, 'tcx>,
     wf.normalize()
 }
 
-pub fn predicate_obligations<'a,'tcx>(infcx: &InferCtxt<'a, 'tcx>,
+pub fn predicate_obligations<'a,'tcx>(infcx: &mut InferCtxt<'a, 'tcx>,
                                       body_id: ast::NodeId,
                                       predicate: &ty::Predicate<'tcx>,
                                       span: Span)
@@ -119,7 +119,7 @@ pub enum ImpliedBound<'tcx> {
 /// the fact that caller/projector has ensured that `ty` is WF.  See
 /// the `ImpliedBound` type for more details.
 pub fn implied_bounds<'a,'tcx>(
-    infcx: &'a InferCtxt<'a,'tcx>,
+    infcx: &mut InferCtxt<'a,'tcx>,
     body_id: ast::NodeId,
     ty: Ty<'tcx>,
     span: Span)
@@ -220,27 +220,28 @@ fn implied_bounds_from_components<'tcx>(sub_region: ty::Region,
         .collect()
 }
 
-struct WfPredicates<'a,'tcx:'a> {
-    infcx: &'a InferCtxt<'a, 'tcx>,
+struct WfPredicates<'a, 'cx:'a,'tcx:'cx> {
+    infcx: &'a mut InferCtxt<'cx, 'tcx>,
     body_id: ast::NodeId,
     span: Span,
     out: Vec<traits::PredicateObligation<'tcx>>,
 }
 
-impl<'a,'tcx> WfPredicates<'a,'tcx> {
+impl<'a,'cx,'tcx> WfPredicates<'a,'cx,'tcx> {
     fn cause(&mut self, code: traits::ObligationCauseCode<'tcx>) -> traits::ObligationCause<'tcx> {
         traits::ObligationCause::new(self.span, self.body_id, code)
     }
 
     fn normalize(&mut self) -> Vec<traits::PredicateObligation<'tcx>> {
         let cause = self.cause(traits::MiscObligation);
-        let infcx = &mut self.infcx;
+        let ref mut infcx = self.infcx;
         self.out.iter()
                 .inspect(|pred| assert!(!pred.has_escaping_regions()))
                 .flat_map(|pred| {
-                    let mut selcx = traits::SelectionContext::new(infcx);
-                    let pred = traits::normalize(&mut selcx, cause.clone(), pred);
-                    once(pred.value).chain(pred.obligations)
+                    traits::SelectionContext::scoped(infcx, |mut selcx| {
+                        let pred = traits::normalize(&mut selcx, cause.clone(), pred);
+                        once(pred.value).chain(pred.obligations)
+                    })
                 })
                 .collect()
     }

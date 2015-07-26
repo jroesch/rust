@@ -19,8 +19,8 @@ use rustc::middle::ty::{self, ParameterEnvironment};
 
 use rustc_front::hir;
 use rustc_front::intravisit;
-use syntax::ast;
-use syntax::codemap::Span;
+
+use std::cell::RefCell;
 
 pub fn check_crate(tcx: &ty::ctxt) {
     let mut rvcx = RvalueContext { tcx: tcx };
@@ -39,12 +39,17 @@ impl<'a, 'tcx, 'v> intravisit::Visitor<'v> for RvalueContext<'a, 'tcx> {
                 s: Span,
                 fn_id: ast::NodeId) {
         {
-            // FIXME (@jroesch) change this to be an inference context
             let param_env = ParameterEnvironment::for_item(self.tcx, fn_id);
-            let infcx = InferCtxt::new(self.tcx,
-                                              &self.tcx.tables,
-                                              Some(param_env.clone()));
-            let mut delegate = RvalueContextDelegate { tcx: self.tcx, param_env: &param_env };
+            let infcx = RefCell::new(InferCtxt::new(
+                self.tcx,
+                &self.tcx.tables,
+                Some(param_env.clone()));
+
+            let mut delegate = RvalueContextDelegate {
+                tcx: self.tcx,
+                param_env: &param_env
+            };
+
             let mut euv = euv::ExprUseVisitor::new(&mut delegate, &infcx);
             euv.walk_fn(fd, b);
         }

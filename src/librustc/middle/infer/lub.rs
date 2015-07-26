@@ -17,29 +17,35 @@ use super::Subtype;
 use middle::ty::{self, Ty};
 use middle::ty::relate::{Relate, RelateResult, TypeRelation};
 
+use std::cell::{RefMut};
+
 /// "Least upper bound" (common supertype)
-pub struct Lub<'a, 'tcx: 'a> {
-    fields: CombineFields<'a, 'tcx>
+pub struct Lub<'infcx, 'a: 'infcx, 'tcx: 'a> {
+    fields: CombineFields<'infcx, 'a, 'tcx>
 }
 
-impl<'a, 'tcx> Lub<'a, 'tcx> {
-    pub fn new(fields: CombineFields<'a, 'tcx>) -> Lub<'a, 'tcx> {
+impl<'infcx, 'a, 'tcx> Lub<'infcx, 'a, 'tcx> {
+    pub fn new(fields: CombineFields<'infcx, 'a, 'tcx>) -> Lub<'infcx, 'a, 'tcx> {
         Lub { fields: fields }
     }
 }
 
-impl<'a, 'tcx> TypeRelation<'a, 'tcx> for Lub<'a, 'tcx> {
+impl<'infcx, 'a, 'tcx> TypeRelation<'infcx, 'a, 'tcx> for Lub<'infcx, 'a, 'tcx> {
     fn tag(&self) -> &'static str { "Lub" }
 
     fn tcx(&self) -> &'a ty::ctxt<'tcx> { self.fields.tcx() }
 
+    fn infcx(&self) -> RefMut<&'infcx mut InferCtxt<'a, 'tcx>> {
+        self.fields.infcx.borrow_mut()
+    }
+
     fn a_is_expected(&self) -> bool { self.fields.a_is_expected }
 
     fn relate_with_variance<T:Relate<'a,'tcx>>(&mut self,
-                                               variance: ty::Variance,
-                                               a: &T,
-                                               b: &T)
-                                               -> RelateResult<'tcx, T>
+                                                      variance: ty::Variance,
+                                                      a: &T,
+                                                      b: &T)
+                                                      -> RelateResult<'tcx, T>
     {
         match variance {
             ty::Invariant => self.fields.equate().relate(a, b),
@@ -60,7 +66,7 @@ impl<'a, 'tcx> TypeRelation<'a, 'tcx> for Lub<'a, 'tcx> {
                b);
 
         let origin = Subtype(self.fields.trace.clone());
-        Ok(self.fields.infcx.region_vars.lub_regions(origin, a, b))
+        Ok(self.fields.infcx.borrow().region_vars.lub_regions(origin, a, b))
     }
 
     fn binders<T>(&mut self, a: &ty::Binder<T>, b: &ty::Binder<T>)
@@ -71,11 +77,7 @@ impl<'a, 'tcx> TypeRelation<'a, 'tcx> for Lub<'a, 'tcx> {
     }
 }
 
-impl<'a, 'tcx> LatticeDir<'a,'tcx> for Lub<'a, 'tcx> {
-    fn infcx(&self) -> &'a InferCtxt<'a,'tcx> {
-        self.fields.infcx
-    }
-
+impl<'infcx, 'a, 'tcx> LatticeDir<'infcx,'a,'tcx> for Lub<'infcx, 'a, 'tcx> {
     fn relate_bound(&self, v: Ty<'tcx>, a: Ty<'tcx>, b: Ty<'tcx>) -> RelateResult<'tcx, ()> {
         let mut sub = self.fields.sub();
         try!(sub.relate(&a, &v));

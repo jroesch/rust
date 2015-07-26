@@ -8,6 +8,7 @@ pub struct SnapshotTree<T> {
     vec: SnapshotVec<Node<T>>
 }
 
+#[derive(Clone)]
 pub struct Node<T> {
     pub elem: T,
     // Roots don't have a parent
@@ -39,6 +40,26 @@ impl<T> SnapshotVecDelegate for Node<T> {
 impl<T> SnapshotTree<T> {
     pub fn new() -> SnapshotTree<T> {
         SnapshotTree { vec: SnapshotVec::new() }
+    }
+
+    pub fn get(&self, index: u32) -> &T {
+        &self.vec[index as usize].elem
+    }
+
+    pub fn get_mut(&mut self, index: u32) -> &mut T {
+        &mut self.vec[index as usize].elem
+    }
+
+    pub fn snapshot(&mut self) -> Snapshot {
+        self.vec.start_snapshot()
+    }
+
+    pub fn rollback_to(&mut self, snapshot: Snapshot) {
+        self.vec.rollback_to(snapshot);
+    }
+
+    pub fn commit(&mut self, snapshot: Snapshot) {
+        self.vec.commit(snapshot);
     }
 
     pub fn insert_root(&mut self, elem: T) -> u32 {
@@ -95,4 +116,3 @@ impl<T> SnapshotTree<T> {
         self.vec[node as usize].child = Some(new_child);
     }
 }
-
