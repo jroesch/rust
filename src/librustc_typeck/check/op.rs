@@ -298,14 +298,14 @@ fn name_and_trait_def_id(fcx: &FnCtxt,
     }
 }
 
-fn lookup_op_method<'a, 'tcx>(fcx: &'a FnCtxt<'a, 'tcx>,
-                              expr: &'tcx hir::Expr,
-                              lhs_ty: Ty<'tcx>,
-                              other_tys: Vec<Ty<'tcx>>,
-                              opname: ast::Name,
-                              trait_did: Option<DefId>,
-                              lhs_expr: &'a hir::Expr)
-                              -> Result<Ty<'tcx>,()>
+fn lookup_op_method<'fcx, 'a, 'tcx>(fcx: &'fcx FnCtxt<'a, 'tcx>,
+                                    expr: &'tcx hir::Expr,
+                                    lhs_ty: Ty<'tcx>,
+                                    other_tys: Vec<Ty<'tcx>>,
+                                    opname: hir::Name,
+                                    trait_did: Option<DefId>,
+                                    lhs_expr: &'a hir::Expr)
+                                    -> Result<Ty<'tcx>,()>
 {
     debug!("lookup_op_method(expr={:?}, lhs_ty={:?}, opname={:?}, trait_did={:?}, lhs_expr={:?})",
            expr,

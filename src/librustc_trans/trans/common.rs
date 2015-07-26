@@ -1000,11 +1000,11 @@ pub fn fulfill_obligation<'a, 'tcx>(ccx: &CrateContext<'a, 'tcx>,
 
     // Do the initial selection for the obligation. This yields the
     // shallow result we are looking for -- that is, what specific impl.
-    let infcx = InferCtxt::normalizing(tcx, &tcx.tables);
-    let mut selcx = traits::SelectionContext::new(&infcx);
+    let mut infcx = InferCtxt::normalizing(tcx, &tcx.tables);
+    let selection = traits::SelectionContext::scoped(&mut infcx, |mut selcx| {
 
-    let obligation =
-        traits::Obligation::new(traits::ObligationCause::misc(span, ast::DUMMY_NODE_ID),
+        let obligation =
+            traits::Obligation::new(traits::ObligationCause::misc(span, ast::DUMMY_NODE_ID),
                                 trait_ref.to_poly_trait_predicate());
     let selection = match selcx.select(&obligation) {
         Ok(Some(selection)) => selection,
@@ -1021,26 +1021,26 @@ pub fn fulfill_obligation<'a, 'tcx>(ccx: &CrateContext<'a, 'tcx>,
             ccx.sess().span_fatal(
                 span,
                 "reached the recursion limit during monomorphization (selection ambiguity)");
+            }
+            Err(e) => {
+                tcx.sess.span_bug(
+                    span,
+                    &format!("Encountered error `{:?}` selecting `{:?}` during trans",
+                             e,
+                             trait_ref))
+            }
         }
-        Err(e) => {
-            tcx.sess.span_bug(
-                span,
-                &format!("Encountered error `{:?}` selecting `{:?}` during trans",
-                        e,
-                        trait_ref))
-        }
-    };
+    });
 
     // Currently, we use a fulfillment context to completely resolve
     // all nested obligations. This is because they can inform the
     // inference of the impl's type parameters.
-    let mut fulfill_cx = infcx.fulfillment_cx.borrow_mut();
     let vtable = selection.map(|predicate| {
-        fulfill_cx.register_predicate_obligation(&infcx, predicate);
+        infcx.register_predicate_obligation(predicate);
     });
-    let vtable = infcx.drain_fulfillment_cx_or_panic(
-        span, &infcx, &mut fulfill_cx, &vtable
-    );
+
+    let vtable = erase_regions(tcx,
+       &infcx.drain_fulfillment_cx_or_panic(&vtable, span));
 
     info!("Cache miss: {:?} => {:?}", trait_ref, vtable);
 
@@ -1061,20 +1061,23 @@ pub fn normalize_and_test_predicates<'a, 'tcx>(ccx: &CrateContext<'a, 'tcx>,
            predicates);
 
     let tcx = ccx.tcx();
-    let infcx = InferCtxt::normalizing(tcx, &tcx.tables);
-    let mut selcx = traits::SelectionContext::new(&infcx);
-    let mut fulfill_cx = infcx.fulfillment_cx.borrow_mut();
+    let mut infcx = InferCtxt::normalizing(tcx, &tcx.tables);
     let cause = traits::ObligationCause::dummy();
     let traits::Normalized { value: predicates, obligations } =
-        traits::normalize(&mut selcx, cause.clone(), &predicates);
+       traits::SelectionContext::scoped(&mut infcx, |mut selcx| {
+           traits::normalize(&mut selcx, cause.clone(), &predicates)
+       });
+
     for obligation in obligations {
-        fulfill_cx.register_predicate_obligation(&infcx, obligation);
+        infcx.register_predicate_obligation(obligation);
     }
+
     for predicate in predicates {
         let obligation = traits::Obligation::new(cause.clone(), predicate);
-        fulfill_cx.register_predicate_obligation(&infcx, obligation);
+        infcx.register_predicate_obligation(obligation);
     }
-    infcx.drain_fulfillment_cx(&mut fulfill_cx, &()).is_ok()
+
+    infcx.drain_fulfillment_cx(&()).is_ok()
 }
 
 // Key used to lookup values supplied for type parameters in an expr.

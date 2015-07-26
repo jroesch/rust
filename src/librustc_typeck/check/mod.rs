@@ -87,13 +87,13 @@ use middle::astconv_util::prohibit_type_params;
 use middle::cstore::LOCAL_CRATE;
 use middle::def;
 use middle::def_id::DefId;
-use middle::infer::{self, InferCtxt};
-use middle::infer;
+use middle::infer::{self, InferCtxt, CombinedSnapshot};
 use middle::infer::{TypeOrigin, type_variable};
 use middle::pat_util::{self, pat_id_map};
 use middle::privacy::{AllPublic, LastMod};
 use middle::subst::{self, Subst, Substs, VecPerParamSpace, ParamSpace, TypeSpace};
 use middle::traits::{self, report_fulfillment_errors};
+use middle::transactional::Transactional;
 use middle::ty::{GenericPredicates, TypeScheme};
 use middle::ty::{Disr, ParamTy, ParameterEnvironment};
 use middle::ty::{LvaluePreference, NoPreference, PreferMutLvalue};
@@ -112,7 +112,7 @@ use lint;
 use util::common::{block_query, ErrorReported, indenter, loop_query};
 use util::nodemap::{DefIdMap, FnvHashMap, NodeMap};
 
-use std::cell::{Cell, Ref, RefCell};
+use std::cell::{Cell, Ref, RefMut, RefCell};
 use std::collections::{HashSet};
 use std::mem::replace;
 use syntax::abi;
@@ -157,7 +157,9 @@ mod op;
 /// `bar()` will each have their own `FnCtxt`, but they will
 /// share the inherited fields.
 pub struct Inherited<'a, 'tcx: 'a> {
-    infcx: infer::InferCtxt<'a, 'tcx>,
+    // Make this a ref-cell for the time being, eventually we should
+    // be able to lift this one out as well.
+    infcx: RefCell<infer::InferCtxt<'a, 'tcx>>,
     locals: RefCell<NodeMap<Ty<'tcx>>>,
 
     tables: &'a RefCell<ty::Tables<'tcx>>,
@@ -297,6 +299,22 @@ pub struct FnCtxt<'a, 'tcx: 'a> {
     ccx: &'a CrateCtxt<'a, 'tcx>,
 }
 
+impl<'a, 'tcx> Transactional for FnCtxt<'a, 'tcx> {
+    type Snapshot = infer::CombinedSnapshot;
+
+    fn start_snapshot(&mut self) -> CombinedSnapshot {
+        self.inh.infcx.borrow_mut().start_snapshot()
+    }
+
+    fn rollback_to(&mut self, cause: &str, snapshot: CombinedSnapshot) {
+        self.inh.infcx.borrow_mut().rollback_to(cause, snapshot)
+    }
+
+    fn commit_from(&mut self, snapshot: CombinedSnapshot) {
+        self.inh.infcx.borrow_mut().commit_from(snapshot);
+    }
+}
+
 impl<'a, 'tcx> Inherited<'a, 'tcx> {
     fn new(tcx: &'a ty::ctxt<'tcx>,
            tables: &'a RefCell<ty::Tables<'tcx>>,
@@ -304,7 +322,7 @@ impl<'a, 'tcx> Inherited<'a, 'tcx> {
            -> Inherited<'a, 'tcx> {
 
         Inherited {
-            infcx: InferCtxt::new(tcx, tables, Some(param_env)),
+            infcx: RefCell::new(InferCtxt::new(tcx, tables, Some(param_env))),
             locals: RefCell::new(NodeMap()),
             tables: tables,
             deferred_call_resolutions: RefCell::new(DefIdMap()),
@@ -319,9 +337,7 @@ impl<'a, 'tcx> Inherited<'a, 'tcx> {
                                         -> T
         where T : TypeFoldable<'tcx> + HasTypeFlags
     {
-        let mut fulfillment_cx = self.infcx.fulfillment_cx.borrow_mut();
-        assoc::normalize_associated_types_in(&self.infcx,
-                                             &mut fulfillment_cx,
+        assoc::normalize_associated_types_in(&mut self.infcx.borrow_mut(),
                                              span,
                                              body_id,
                                              value)
@@ -440,7 +456,7 @@ fn check_bare_fn<'a, 'tcx>(ccx: &CrateCtxt<'a, 'tcx>,
             // Compute the fty from point of view of inside fn.
             let fn_scope = ccx.tcx.region_maps.call_site_extent(fn_id, body.id);
             let fn_sig =
-                fn_ty.sig.subst(ccx.tcx, &inh.infcx.parameter_environment.free_substs);
+                fn_ty.sig.subst(ccx.tcx, &inh.infcx.borrow().parameter_environment.free_substs);
             let fn_sig =
                 ccx.tcx.liberate_late_bound_regions(fn_scope, &fn_sig);
             let fn_sig =
@@ -465,11 +481,11 @@ fn check_bare_fn<'a, 'tcx>(ccx: &CrateCtxt<'a, 'tcx>,
     }
 }
 
-struct GatherLocalsVisitor<'a, 'tcx: 'a> {
-    fcx: &'a FnCtxt<'a, 'tcx>
+struct GatherLocalsVisitor<'fcx, 'a: 'fcx, 'tcx: 'a> {
+    fcx: &'fcx FnCtxt<'a, 'tcx>
 }
 
-impl<'a, 'tcx> GatherLocalsVisitor<'a, 'tcx> {
+impl<'fcx, 'a, 'tcx> GatherLocalsVisitor<'fcx, 'a, 'tcx> {
     fn assign(&mut self, _span: Span, nid: ast::NodeId, ty_opt: Option<Ty<'tcx>>) -> Ty<'tcx> {
         match ty_opt {
             None => {
@@ -487,7 +503,7 @@ impl<'a, 'tcx> GatherLocalsVisitor<'a, 'tcx> {
     }
 }
 
-impl<'a, 'tcx> Visitor<'tcx> for GatherLocalsVisitor<'a, 'tcx> {
+impl<'fcx, 'a, 'tcx> Visitor<'tcx> for GatherLocalsVisitor<'fcx, 'a, 'tcx> {
     // Add explicitly-declared locals.
     fn visit_local(&mut self, local: &'tcx hir::Local) {
         let o_ty = match local.ty {
@@ -1105,7 +1121,8 @@ impl<'a, 'tcx> AstConv<'tcx> for FnCtxt<'a, 'tcx> {
     }
 
     fn get_free_substs(&self) -> Option<&Substs<'tcx>> {
-        Some(&self.inh.infcx.parameter_environment.free_substs)
+        panic!()
+        // Some(&self.inh.infcx.borrow().parameter_environment.free_substs)
     }
 
     fn get_type_parameter_bounds(&self,
@@ -1114,7 +1131,8 @@ impl<'a, 'tcx> AstConv<'tcx> for FnCtxt<'a, 'tcx> {
                                  -> Result<Vec<ty::PolyTraitRef<'tcx>>, ErrorReported>
     {
         let def = self.tcx().type_parameter_def(node_id);
-        let r = self.inh.infcx.parameter_environment
+        let r = self.inh.infcx.borrow()
+                                  .parameter_environment
                                   .caller_bounds
                                   .iter()
                                   .filter_map(|predicate| {
@@ -1193,14 +1211,15 @@ impl<'a, 'tcx> AstConv<'tcx> for FnCtxt<'a, 'tcx> {
 }
 
 impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
-    fn tcx(&self) -> &ty::ctxt<'tcx> { self.ccx.tcx }
+    fn tcx(&self) -> &'a ty::ctxt<'tcx> { self.ccx.tcx }
 
-    pub fn infcx(&self) -> &infer::InferCtxt<'a,'tcx> {
-        &self.inh.infcx
+    pub fn infcx(&self) -> RefMut<infer::InferCtxt<'a,'tcx>> {
+        self.inh.infcx.borrow_mut()
     }
 
     pub fn param_env(&self) -> &ty::ParameterEnvironment<'a,'tcx> {
-        &self.inh.infcx.parameter_environment
+        //&self.inh.infcx.parameter_environment
+        panic!()
     }
 
     pub fn sess(&self) -> &Session {
@@ -1364,16 +1383,13 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
         let cause = traits::ObligationCause::new(span,
                                                  self.body_id,
                                                  traits::ObligationCauseCode::MiscObligation);
-        self.inh
-            .infcx
-            .fulfillment_cx
-            .borrow_mut()
-            .normalize_projection_type(self.infcx(),
-                                       ty::ProjectionTy {
-                                           trait_ref: trait_ref,
-                                           item_name: item_name,
-                                       },
-                                       cause)
+        self.infcx()
+            .normalize_projection_type(
+                ty::ProjectionTy {
+                    trait_ref: trait_ref,
+                    item_name: item_name,
+                },
+                cause)
     }
 
     /// Instantiates the type in `did` with the generics in `path` and returns
@@ -1487,7 +1503,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
                                      span: Span)
                                      -> bool
     {
-        traits::type_known_to_meet_builtin_bound(self.infcx(),
+        traits::type_known_to_meet_builtin_bound(&mut self.infcx(),
                                                  ty,
                                                  ty::BoundSized,
                                                  span)
@@ -1498,8 +1514,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
                                   builtin_bound: ty::BuiltinBound,
                                   cause: traits::ObligationCause<'tcx>)
     {
-        self.inh.infcx.fulfillment_cx.borrow_mut()
-            .register_builtin_bound(self.infcx(), ty, builtin_bound, cause);
+        self.infcx().register_builtin_bound(ty, builtin_bound, cause);
     }
 
     pub fn register_predicate(&self,
@@ -1507,9 +1522,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
     {
         debug!("register_predicate({:?})",
                obligation);
-        self.inh.infcx.fulfillment_cx
-            .borrow_mut()
-            .register_predicate_obligation(self.infcx(), obligation);
+        self.infcx().register_predicate_obligation(obligation);
     }
 
     pub fn to_ty(&self, ast_t: &hir::Ty) -> Ty<'tcx> {
@@ -1628,8 +1641,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
                                       region: ty::Region,
                                       cause: traits::ObligationCause<'tcx>)
     {
-        let mut fulfillment_cx = self.inh.infcx.fulfillment_cx.borrow_mut();
-        fulfillment_cx.register_region_obligation(ty, region, cause);
+        self.infcx().register_region_obligation(ty, region, cause);
     }
 
     /// Registers an obligation for checking later, during regionck, that the type `ty` must
@@ -1775,7 +1787,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
             let mut conflicts = Vec::new();
 
             // Collect all unsolved type, integral and floating point variables.
-            let unsolved_variables = self.inh.infcx.unsolved_variables();
+            let unsolved_variables = self.infcx().unsolved_variables();
 
             // We must collect the defaults *before* we do any unification. Because we have
             // directly attached defaults to the type variables any unification that occurs
@@ -1851,24 +1863,25 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
             // for conflicts and correctly report them.
 
 
-            let _ = self.infcx().commit_if_ok(|_: &infer::CombinedSnapshot| {
+            let _ = self.infcx().commit_if_ok(|_, infcx| {
                 for ty in &unbound_tyvars {
-                    if self.infcx().type_var_diverges(ty) {
-                        demand::eqtype(self, codemap::DUMMY_SP, *ty, self.tcx().mk_nil());
+                    if infcx.type_var_diverges(ty) {
+                        demand::eqtype(self, codemap::DUMMY_SP, *ty, infcx.tcx.mk_nil());
                     } else {
-                        match self.infcx().type_is_unconstrained_numeric(ty) {
+                        match infcx.type_is_unconstrained_numeric(ty) {
                             UnconstrainedInt => {
-                                demand::eqtype(self, codemap::DUMMY_SP, *ty, self.tcx().types.i32)
+                                demand::eqtype(self, codemap::DUMMY_SP, *ty, infcx.tcx.types.i32)
                             },
                             UnconstrainedFloat => {
-                                demand::eqtype(self, codemap::DUMMY_SP, *ty, self.tcx().types.f64)
+                                demand::eqtype(self, codemap::DUMMY_SP, *ty, infcx.tcx.types.f64)
                             }
                             Neither => {
                                 if let Some(default) = default_map.get(ty) {
                                     let default = default.clone();
-                                    match infer::mk_eqty(self.infcx(), false,
-                                                         TypeOrigin::Misc(default.origin_span),
-                                                         ty, default.ty) {
+                                    match infcx.mk_eqty(false,
+                                                    
+TypeOrigin::Misc(default.origin_span),
+                                                        ty, default.ty) {
                                         Ok(()) => {}
                                         Err(_) => {
                                             conflicts.push((*ty, default));
@@ -1959,9 +1972,10 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
                     Neither => {
                         if let Some(default) = default_map.get(ty) {
                             let default = default.clone();
-                            match infer::mk_eqty(self.infcx(), false,
-                                                 TypeOrigin::Misc(default.origin_span),
-                                                 ty, default.ty) {
+                            match self.infcx().mk_eqty(false,
+                                                    
+TypeOrigin::Misc(default.origin_span),
+                                                       ty, default.ty) {
                                 Ok(()) => {}
                                 Err(_) => {
                                     result = Some(default);
@@ -1985,22 +1999,32 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
 
         self.select_all_obligations_and_apply_defaults();
 
-        let mut fulfillment_cx = self.inh.infcx.fulfillment_cx.borrow_mut();
-        match fulfillment_cx.select_all_or_error(self.infcx()) {
+        match self.infcx().select_all_or_error() {
             Ok(()) => { }
-            Err(errors) => { report_fulfillment_errors(self.infcx(), &errors); }
+            Err(errors) => { report_fulfillment_errors(&mut self.infcx(), &errors); }
         }
     }
 
     /// Select as many obligations as we can at present.
     fn select_obligations_where_possible(&self) {
         match
-            self.inh.infcx.fulfillment_cx
-            .borrow_mut()
-            .select_where_possible(self.infcx())
+            self.infcx().select_where_possible()
         {
             Ok(()) => { }
-            Err(errors) => { report_fulfillment_errors(self.infcx(), &errors); }
+            Err(errors) => { report_fulfillment_errors(&mut self.infcx(), &errors); }
+        }
+    }
+
+    /// Try to select any fcx obligation that we haven't tried yet, in an effort
+    /// to improve inference. You could just call
+    /// `select_obligations_where_possible` except that it leads to repeated
+    /// work.
+    fn select_new_obligations(&self) {
+        match
+            self.infcx().select_new_obligations()
+        {
+            Ok(()) => { }
+            Err(errors) => { report_fulfillment_errors(&mut self.infcx(), &errors); }
         }
     }
 }
@@ -2699,11 +2723,11 @@ pub fn impl_self_ty<'a, 'tcx>(fcx: &FnCtxt<'a, 'tcx>,
 
     debug!("impl_self_ty: tps={:?} rps={:?} raw_ty={:?}", tps, rps, raw_ty);
 
-    let rps = fcx.inh.infcx.region_vars_for_defs(span, rps);
+    let rps = fcx.infcx().region_vars_for_defs(span, rps);
     let mut substs = subst::Substs::new(
         VecPerParamSpace::empty(),
         VecPerParamSpace::new(rps, Vec::new(), Vec::new()));
-    fcx.inh.infcx.type_vars_for_defs(span, ParamSpace::TypeSpace, &mut substs, tps);
+    fcx.infcx().type_vars_for_defs(span, ParamSpace::TypeSpace, &mut substs, tps);
     let substd_ty = fcx.instantiate_type_scheme(span, &substs, &raw_ty);
 
     TypeAndSubsts { substs: substs, ty: substd_ty }

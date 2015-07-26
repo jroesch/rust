@@ -127,6 +127,7 @@ pub mod middle {
     pub mod stability;
     pub mod subst;
     pub mod traits;
+    pub mod transactional;
     pub mod ty;
     pub mod weak_lang_items;
 }

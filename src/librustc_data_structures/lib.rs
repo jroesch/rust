@@ -40,7 +40,6 @@ pub mod snapshot_vec;
 pub mod snapshot_tree;
 pub mod graph;
 pub mod bitvec;
-pub mod graph;
 pub mod ivar;
 pub mod obligation_forest;
 pub mod snapshot_vec;

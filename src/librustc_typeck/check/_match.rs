@@ -33,9 +33,9 @@ use rustc_front::hir;
 use rustc_front::print::pprust;
 use rustc_front::util as hir_util;
 
-pub fn check_pat<'a, 'tcx>(pcx: &pat_ctxt<'a, 'tcx>,
-                           pat: &'tcx hir::Pat,
-                           expected: Ty<'tcx>)
+pub fn check_pat<'fcx, 'a, 'tcx>(pcx: &'fcx pat_ctxt<'fcx, 'a, 'tcx>,
+                                 pat: &'tcx hir::Pat,
+                                 expected: Ty<'tcx>)
 {
     let fcx = pcx.fcx;
     let tcx = pcx.fcx.ccx.tcx;
@@ -116,7 +116,7 @@ pub fn check_pat<'a, 'tcx>(pcx: &pat_ctxt<'a, 'tcx>,
 
             // Check that the types of the end-points can be unified.
             let types_unify = require_same_types(
-                    tcx, Some(fcx.infcx()), false, pat.span, rhs_ty, lhs_ty,
+                    tcx, Some(&mut fcx.infcx()), false, pat.span, rhs_ty, lhs_ty,
                     || "mismatched types in range".to_string()
             );
 
@@ -424,9 +424,9 @@ fn check_assoc_item_is_const(pcx: &pat_ctxt, def: def::Def, span: Span) -> bool 
     }
 }
 
-pub fn check_dereferencable<'a, 'tcx>(pcx: &pat_ctxt<'a, 'tcx>,
-                                      span: Span, expected: Ty<'tcx>,
-                                      inner: &hir::Pat) -> bool {
+pub fn check_dereferencable<'fcx, 'a, 'tcx>(pcx: &pat_ctxt<'fcx, 'a, 'tcx>,
+                                            span: Span, expected: Ty<'tcx>,
+                                            inner: &hir::Pat) -> bool {
     let fcx = pcx.fcx;
     let tcx = pcx.fcx.ccx.tcx;
     if pat_is_binding(&tcx.def_map.borrow(), inner) {
@@ -549,14 +549,14 @@ pub fn check_match<'a, 'tcx>(fcx: &FnCtxt<'a, 'tcx>,
     fcx.write_ty(expr.id, result_ty);
 }
 
-pub struct pat_ctxt<'a, 'tcx: 'a> {
-    pub fcx: &'a FnCtxt<'a, 'tcx>,
+pub struct pat_ctxt<'fcx, 'a:'fcx, 'tcx: 'a> {
+    pub fcx: &'fcx FnCtxt<'a, 'tcx>,
     pub map: PatIdMap,
 }
 
-pub fn check_pat_struct<'a, 'tcx>(pcx: &pat_ctxt<'a, 'tcx>, pat: &'tcx hir::Pat,
-                                  path: &hir::Path, fields: &'tcx [Spanned<hir::FieldPat>],
-                                  etc: bool, expected: Ty<'tcx>) {
+pub fn check_pat_struct<'fcx, 'a, 'tcx>(pcx: &pat_ctxt<'fcx, 'a, 'tcx>, pat: &'tcx hir::Pat,
+                                        path: &hir::Path, fields: &'tcx [Spanned<hir::FieldPat>],
+                                        etc: bool, expected: Ty<'tcx>) {
     let fcx = pcx.fcx;
     let tcx = pcx.fcx.ccx.tcx;
 
@@ -595,11 +595,11 @@ fn bad_struct_kind_err(sess: &Session, span: Span, path: &hir::Path, is_warning:
         "`{}` does not name a tuple variant or a tuple struct", name);
 }
 
-pub fn check_pat_enum<'a, 'tcx>(pcx: &pat_ctxt<'a, 'tcx>,
-                                pat: &hir::Pat,
-                                path: &hir::Path,
-                                subpats: Option<&'tcx [P<hir::Pat>]>,
-                                expected: Ty<'tcx>,
+pub fn check_pat_enum<'fcx, 'a, 'tcx>(pcx: &pat_ctxt<'fcx, 'a, 'tcx>,
+                                      pat: &hir::Pat,
+                                      path: &hir::Path,
+                                      subpats: Option<&'tcx [P<hir::Pat>]>,
+                                      expected: Ty<'tcx>)
                                 is_tuple_struct_pat: bool)
 {
     // Typecheck the path.
@@ -764,12 +764,12 @@ pub fn check_pat_enum<'a, 'tcx>(pcx: &pat_ctxt<'a, 'tcx>,
 /// `struct_fields` describes the type of each field of the struct.
 /// `struct_id` is the ID of the struct.
 /// `etc` is true if the pattern said '...' and false otherwise.
-pub fn check_struct_pat_fields<'a, 'tcx>(pcx: &pat_ctxt<'a, 'tcx>,
-                                         span: Span,
-                                         fields: &'tcx [Spanned<hir::FieldPat>],
-                                         variant: ty::VariantDef<'tcx>,
-                                         substs: &Substs<'tcx>,
-                                         etc: bool) {
+pub fn check_struct_pat_fields<'fcx, 'a, 'tcx>(pcx: &pat_ctxt<'fcx, 'a, 'tcx>,
+                                               span: Span,
+                                               fields: &'tcx [Spanned<hir::FieldPat>],
+                                               variant: ty::VariantDef<'tcx>,
+                                               substs: &Substs<'tcx>,
+                                               etc: bool) {
     let tcx = pcx.fcx.ccx.tcx;
 
     // Index the struct fields' types.

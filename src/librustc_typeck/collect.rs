@@ -2330,9 +2330,9 @@ fn check_method_self_type<'a, 'tcx, RS:RegionScope>(
                base_type,
                base_type_free);
 
-        let infcx = InferCtxt::new(tcx, &tcx.tables, None);
+        let mut infcx = InferCtxt::new(tcx, &tcx.tables, None);
         drop(::require_same_types(tcx,
-                                  Some(&infcx),
+                                  Some(&mut infcx),
                                   false,
                                   explicit_self.span,
                                   base_type_free,

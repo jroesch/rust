@@ -40,6 +40,7 @@ use util::nodemap::{NodeSet};
 use lint::{Level, LateContext, LintContext, LintArray, Lint};
 use lint::{LintPass, LateLintPass};
 
+use std::cell::RefCell;
 use std::collections::HashSet;
 
 use syntax::{ast};

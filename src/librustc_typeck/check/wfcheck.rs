@@ -131,8 +131,8 @@ impl<'ccx, 'tcx> CheckTypeWellFormedVisitor<'ccx, 'tcx> {
     fn check_trait_or_impl_item(&mut self, item_id: ast::NodeId, span: Span) {
         let code = self.code.clone();
         self.with_fcx(item_id, span, |fcx, this| {
-            let free_substs = &fcx.inh.infcx.parameter_environment.free_substs;
-            let free_id_outlive = fcx.inh.infcx.parameter_environment.free_id_outlive;
+            let free_substs = &fcx.infcx().parameter_environment.free_substs;
+            let free_id = fcx.infcx().parameter_environment.free_id_outlive;
 
             let item = fcx.tcx().impl_or_trait_item(fcx.tcx().map.local_def_id(item_id));
 
@@ -234,7 +234,7 @@ impl<'ccx, 'tcx> CheckTypeWellFormedVisitor<'ccx, 'tcx> {
         }
 
         self.with_item_fcx(item, |fcx, this| {
-            let free_substs = &fcx.inh.infcx.parameter_environment.free_substs;
+            let free_substs = &fcx.infcx().parameter_environment.free_substs;
             let predicates = fcx.tcx().lookup_predicates(trait_def_id);
             let predicates = fcx.instantiate_bounds(item.span, free_substs, &predicates);
             this.check_where_clauses(fcx, item.span, &predicates);
@@ -247,7 +247,7 @@ impl<'ccx, 'tcx> CheckTypeWellFormedVisitor<'ccx, 'tcx> {
                      body: &hir::Block)
     {
         self.with_item_fcx(item, |fcx, this| {
-            let free_substs = &fcx.inh.infcx.parameter_environment.free_substs;
+            let free_substs = &fcx.inh.infcx().parameter_environment.free_substs;
             let type_scheme = fcx.tcx().lookup_item_type(fcx.tcx().map.local_def_id(item.id));
             let item_ty = fcx.instantiate_type_scheme(item.span, free_substs, &type_scheme.ty);
             let bare_fn_ty = match item_ty.sty {
@@ -276,8 +276,7 @@ impl<'ccx, 'tcx> CheckTypeWellFormedVisitor<'ccx, 'tcx> {
         self.with_item_fcx(item, |fcx, this| {
             let type_scheme = fcx.tcx().lookup_item_type(fcx.tcx().map.local_def_id(item.id));
             let item_ty = fcx.instantiate_type_scheme(item.span,
-                                                      &fcx.inh
-                                                          .infcx
+                                                      &fcx.infcx()
                                                           .parameter_environment
                                                           .free_substs,
                                                       &type_scheme.ty);
@@ -296,7 +295,7 @@ impl<'ccx, 'tcx> CheckTypeWellFormedVisitor<'ccx, 'tcx> {
         debug!("check_impl: {:?}", item);
 
         self.with_item_fcx(item, |fcx, this| {
-            let free_substs = &fcx.inh.infcx.parameter_environment.free_substs;
+            let free_substs = &fcx.inh.infcx().parameter_environment.free_substs;
             let item_def_id = fcx.tcx().map.local_def_id(item.id);
 
             match *ast_trait_ref {
@@ -306,8 +305,9 @@ impl<'ccx, 'tcx> CheckTypeWellFormedVisitor<'ccx, 'tcx> {
                         fcx.instantiate_type_scheme(
                             ast_trait_ref.path.span, free_substs, &trait_ref);
                     let obligations =
-                        ty::wf::trait_obligations(fcx.infcx(),
-                                                  fcx.body_id,
+                        wf::trait_obligations(&mut fcx.infcx(),
+                                              fcx.body_id,
+                                              &trait_ref,
                                                   &trait_ref,
                                                   ast_trait_ref.path.span);
                     for obligation in obligations {
@@ -337,9 +337,10 @@ impl<'ccx, 'tcx> CheckTypeWellFormedVisitor<'ccx, 'tcx> {
         let obligations =
             predicates.predicates
                       .iter()
-                      .flat_map(|p| ty::wf::predicate_obligations(fcx.infcx(),
-                                                                  fcx.body_id,
-                                                                  p,
+                      .flat_map(|p| wf::predicate_obligations(&mut fcx.infcx(),
+                                                              fcx.body_id,
+                                                              p,
+                                                       
                                                                   span));
 
         for obligation in obligations {
@@ -355,7 +356,7 @@ impl<'ccx, 'tcx> CheckTypeWellFormedVisitor<'ccx, 'tcx> {
                                 free_id_outlive: CodeExtent,
                                 implied_bounds: &mut Vec<Ty<'tcx>>)
     {
-        let free_substs = &fcx.inh.infcx.parameter_environment.free_substs;
+        let free_substs = &fcx.infcx().parameter_environment.free_substs;
         let fty = fcx.instantiate_type_scheme(span, free_substs, fty);
         let sig = fcx.tcx().liberate_late_bound_regions(free_id_outlive, &fty.sig);
 
@@ -523,8 +524,7 @@ fn struct_variant<'a, 'tcx>(fcx: &FnCtxt<'a, 'tcx>,
         .map(|field| {
             let field_ty = fcx.tcx().node_id_to_type(field.node.id);
             let field_ty = fcx.instantiate_type_scheme(field.span,
-                                                       &fcx.inh
-                                                           .infcx
+                                                       &fcx.infcx()
                                                            .parameter_environment
                                                            .free_substs,
                                                        &field_ty);
@@ -547,7 +547,7 @@ fn impl_implied_bounds<'fcx,'tcx>(fcx: &FnCtxt<'fcx, 'tcx>,
                                   span: Span)
                                   -> Vec<Ty<'tcx>>
 {
-    let free_substs = &fcx.inh.infcx.parameter_environment.free_substs;
+    let free_substs = &fcx.infcx().parameter_environment.free_substs;
     match fcx.tcx().impl_trait_ref(impl_def_id) {
         Some(ref trait_ref) => {
             // Trait impl: take implied bounds from all types that

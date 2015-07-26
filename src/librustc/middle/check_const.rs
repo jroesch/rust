@@ -44,6 +44,7 @@ use syntax::codemap::Span;
 use syntax::feature_gate::UnstableFeatures;
 use rustc_front::intravisit::{self, FnKind, Visitor};
 
+use std::cell::RefCell;
 use std::collections::hash_map::Entry;
 use std::cmp::Ordering;
 
@@ -124,7 +125,11 @@ impl<'a, 'tcx> CheckCrateVisitor<'a, 'tcx> {
             None => self.tcx.empty_parameter_environment()
         };
 
-        let infcx = InferCtxt::new(self.tcx, &self.tcx.tables, Some(param_env));
+        let infcx =
+            RefCell::new(InferCtxt::new(self.tcx,
+                                        &self.tcx.tables,
+                                        Some(param_env));
+                                    
 
         f(&mut euv::ExprUseVisitor::new(self, &infcx))
     }
@@ -293,14 +298,13 @@ impl<'a, 'tcx> CheckCrateVisitor<'a, 'tcx> {
 
     fn check_static_type(&self, e: &hir::Expr) {
         let ty = self.tcx.node_id_to_type(e.id);
-        let infcx = InferCtxt::new(self.tcx, &self.tcx.tables, None);
+        let mut infcx = InferCtxt::new(self.tcx, &self.tcx.tables, None);
         let cause = traits::ObligationCause::new(e.span, e.id, traits::SharedStatic);
-        let mut fulfill_cx = infcx.fulfillment_cx.borrow_mut();
-        fulfill_cx.register_builtin_bound(&infcx, ty, ty::BoundSync, cause);
-        match fulfill_cx.select_all_or_error(&infcx) {
+        infcx.register_builtin_bound(ty, ty::BoundSync, cause);
+        match infcx.select_all_or_error() {
             Ok(()) => { },
             Err(ref errors) => {
-                traits::report_fulfillment_errors(&infcx, errors);
+                traits::report_fulfillment_errors(&mut infcx, errors);
             }
         }
     }

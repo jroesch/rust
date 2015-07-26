@@ -17,21 +17,26 @@ use super::Subtype;
 use middle::ty::{self, Ty};
 use middle::ty::relate::{Relate, RelateResult, TypeRelation};
 
+use std::cell::{RefMut};
 /// "Greatest lower bound" (common subtype)
-pub struct Glb<'a, 'tcx: 'a> {
-    fields: CombineFields<'a, 'tcx>
+pub struct Glb<'infcx, 'a: 'infcx, 'tcx: 'a> {
+    fields: CombineFields<'infcx, 'a, 'tcx>
 }
 
-impl<'a, 'tcx> Glb<'a, 'tcx> {
-    pub fn new(fields: CombineFields<'a, 'tcx>) -> Glb<'a, 'tcx> {
+impl<'infcx, 'a, 'tcx> Glb<'infcx, 'a, 'tcx> {
+    pub fn new(fields: CombineFields<'infcx, 'a, 'tcx>) -> Glb<'infcx, 'a, 'tcx> {
         Glb { fields: fields }
     }
 }
 
-impl<'a, 'tcx> TypeRelation<'a, 'tcx> for Glb<'a, 'tcx> {
+impl<'infcx, 'a, 'tcx> TypeRelation<'infcx, 'a, 'tcx> for Glb<'infcx, 'a, 'tcx> {
     fn tag(&self) -> &'static str { "Glb" }
 
     fn tcx(&self) -> &'a ty::ctxt<'tcx> { self.fields.tcx() }
+
+    fn infcx(&self) -> RefMut<&'infcx mut InferCtxt<'a, 'tcx>> {
+        self.fields.infcx.borrow_mut()
+    }
 
     fn a_is_expected(&self) -> bool { self.fields.a_is_expected }
 
@@ -60,7 +65,7 @@ impl<'a, 'tcx> TypeRelation<'a, 'tcx> for Glb<'a, 'tcx> {
                b);
 
         let origin = Subtype(self.fields.trace.clone());
-        Ok(self.fields.infcx.region_vars.glb_regions(origin, a, b))
+        Ok(self.fields.infcx.borrow().region_vars.glb_regions(origin, a, b))
     }
 
     fn binders<T>(&mut self, a: &ty::Binder<T>, b: &ty::Binder<T>)
@@ -71,11 +76,7 @@ impl<'a, 'tcx> TypeRelation<'a, 'tcx> for Glb<'a, 'tcx> {
     }
 }
 
-impl<'a, 'tcx> LatticeDir<'a,'tcx> for Glb<'a, 'tcx> {
-    fn infcx(&self) -> &'a InferCtxt<'a,'tcx> {
-        self.fields.infcx
-    }
-
+impl<'infcx, 'a, 'tcx> LatticeDir<'infcx,'a,'tcx> for Glb<'infcx, 'a, 'tcx> {
     fn relate_bound(&self, v: Ty<'tcx>, a: Ty<'tcx>, b: Ty<'tcx>) -> RelateResult<'tcx, ()> {
         let mut sub = self.fields.sub();
         try!(sub.relate(&v, &a));

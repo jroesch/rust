@@ -26,26 +26,33 @@
 //! all (A,B).
 
 use super::combine::{self, CombineFields};
+use super::InferCtxt;
 use super::type_variable::{BiTo};
 
 use middle::ty::{self, Ty};
 use middle::ty::TyVar;
 use middle::ty::relate::{Relate, RelateResult, TypeRelation};
 
-pub struct Bivariate<'a, 'tcx: 'a> {
-    fields: CombineFields<'a, 'tcx>
+use std::cell::RefMut;
+
+pub struct Bivariate<'infcx, 'a: 'infcx, 'tcx: 'a> {
+    fields: CombineFields<'infcx, 'a, 'tcx>
 }
 
-impl<'a, 'tcx> Bivariate<'a, 'tcx> {
-    pub fn new(fields: CombineFields<'a, 'tcx>) -> Bivariate<'a, 'tcx> {
+impl<'infcx, 'a, 'tcx> Bivariate<'infcx, 'a, 'tcx> {
+    pub fn new(fields: CombineFields<'infcx, 'a, 'tcx>) -> Bivariate<'infcx, 'a, 'tcx> {
         Bivariate { fields: fields }
     }
 }
 
-impl<'a, 'tcx> TypeRelation<'a, 'tcx> for Bivariate<'a, 'tcx> {
+impl<'infcx, 'a, 'tcx> TypeRelation<'infcx, 'a, 'tcx> for Bivariate<'infcx, 'a, 'tcx> {
     fn tag(&self) -> &'static str { "Bivariate" }
 
     fn tcx(&self) -> &'a ty::ctxt<'tcx> { self.fields.tcx() }
+
+    fn infcx(&self) -> RefMut<&'infcx mut InferCtxt<'a, 'tcx>> {
+        self.fields.infcx.borrow_mut()
+    }
 
     fn a_is_expected(&self) -> bool { self.fields.a_is_expected }
 
@@ -76,12 +83,28 @@ impl<'a, 'tcx> TypeRelation<'a, 'tcx> for Bivariate<'a, 'tcx> {
                a, b);
         if a == b { return Ok(a); }
 
-        let infcx = self.fields.infcx;
-        let a = infcx.type_variables.borrow().replace_if_possible(a);
-        let b = infcx.type_variables.borrow().replace_if_possible(b);
+        let (a, b) = {
+            let infcx = self.fields.infcx.borrow();
+
+            let a = infcx
+                .type_variables
+                .borrow()
+                .replace_if_possible(a);
+
+            let b = infcx
+                .type_variables
+                .borrow()
+                .replace_if_possible(b);
+
+            (a, b)
+        };
+
         match (&a.sty, &b.sty) {
             (&ty::TyInfer(TyVar(a_id)), &ty::TyInfer(TyVar(b_id))) => {
-                infcx.type_variables.borrow_mut().relate_vars(a_id, BiTo, b_id);
+                let infcx = self.fields.infcx.borrow();
+                infcx.type_variables
+                     .borrow_mut()
+                     .relate_vars(a_id, BiTo, b_id);
                 Ok(a)
             }
 
@@ -96,7 +119,7 @@ impl<'a, 'tcx> TypeRelation<'a, 'tcx> for Bivariate<'a, 'tcx> {
             }
 
             _ => {
-                combine::super_combine_tys(self.fields.infcx, self, a, b)
+                combine::super_combine_tys(self, a, b)
             }
         }
     }

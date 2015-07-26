@@ -84,6 +84,7 @@ use rustc_front::hir;
 use syntax::ast;
 use syntax::codemap::Span;
 
+use std::cell::{RefCell, Ref};
 use std::fmt;
 use std::rc::Rc;
 
@@ -257,7 +258,7 @@ impl ast_node for hir::Pat {
 
 #[derive(Copy, Clone)]
 pub struct MemCategorizationContext<'t, 'a: 't, 'tcx : 'a> {
-    pub typer: &'t infer::InferCtxt<'a, 'tcx>,
+    pub typer: &'t RefCell<infer::InferCtxt<'a, 'tcx>>,
 }
 
 pub type McResult<T> = Result<T, ()>;
@@ -359,16 +360,17 @@ impl MutabilityCategory {
 }
 
 impl<'t, 'a,'tcx> MemCategorizationContext<'t, 'a, 'tcx> {
-    pub fn new(typer: &'t infer::InferCtxt<'a, 'tcx>) -> MemCategorizationContext<'t, 'a, 'tcx> {
-        MemCategorizationContext { typer: typer }
+    pub fn new(infcx: &'t RefCell<infer::InferCtxt<'a, 'tcx>>) -> MemCategorizationContext<'t, 'a, 'tcx> {
+        MemCategorizationContext { typer: infcx }
     }
 
-    fn tcx(&self) -> &'a ty::ctxt<'tcx> {
-        self.typer.tcx
+    fn tcx(&self) -> Ref<ty::ctxt<'tcx>> {
+        panic!() // self.typer.tcx
     }
 
     fn expr_ty(&self, expr: &hir::Expr) -> McResult<Ty<'tcx>> {
-        match self.typer.node_ty(expr.id) {
+        let mut infcx = self.typer.borrow_mut();
+        match infcx.node_ty(expr.id) {
             Ok(t) => Ok(t),
             Err(()) => {
                 debug!("expr_ty({:?}) yielded Err", expr);
@@ -379,18 +381,25 @@ impl<'t, 'a,'tcx> MemCategorizationContext<'t, 'a, 'tcx> {
 
     fn expr_ty_adjusted(&self, expr: &hir::Expr) -> McResult<Ty<'tcx>> {
         let unadjusted_ty = try!(self.expr_ty(expr));
+        let mut infcx = self.typer.borrow_mut();
+        // let adjustment = infcx.adjustments().get(&expr.id).clone();
         Ok(unadjusted_ty.adjust(
-            self.tcx(), expr.span, expr.id,
-            self.typer.adjustments().get(&expr.id),
-            |method_call| self.typer.node_method_ty(method_call)))
+            &*self.tcx(), expr.span, expr.id,
+            panic!(), // adjustment,
+            |method_call| {
+                // let mut infcx = self.typer.borrow_mut();
+                infcx.node_method_ty(method_call)
+           }))
     }
 
     fn node_ty(&self, id: ast::NodeId) -> McResult<Ty<'tcx>> {
-        self.typer.node_ty(id)
+        let mut infcx = self.typer.borrow_mut();
+        infcx.node_ty(id)
     }
 
     fn pat_ty(&self, pat: &hir::Pat) -> McResult<Ty<'tcx>> {
-        let base_ty = try!(self.typer.node_ty(pat.id));
+        let mut infcx = self.typer.borrow_mut();
+        let base_ty = try!(infcx.node_ty(pat.id));
         // FIXME (Issue #18207): This code detects whether we are
         // looking at a `ref x`, and if so, figures out what the type
         // *being borrowed* is.  But ideally we would put in a more
@@ -413,7 +422,11 @@ impl<'t, 'a,'tcx> MemCategorizationContext<'t, 'a, 'tcx> {
     }
 
     pub fn cat_expr(&self, expr: &hir::Expr) -> McResult<cmt<'tcx>> {
-        match self.typer.adjustments().get(&expr.id) {
+        // extra clone here, not sure about the lifetime issue
+        let mut infcx = self.typer.borrow_mut();
+        let adjustment = infcx.adjustments().get(&expr.id).map(|x| x.clone());
+
+        match adjustment {
             None => {
                 // No adjustments.
                 self.cat_expr_unadjusted(expr)
@@ -484,7 +497,7 @@ impl<'t, 'a,'tcx> MemCategorizationContext<'t, 'a, 'tcx> {
           hir::ExprIndex(ref base, _) => {
             let method_call = ty::MethodCall::expr(expr.id());
             let context = InteriorOffsetKind::Index;
-            match self.typer.node_method_ty(method_call) {
+            match self.typer.borrow_mut().node_method_ty(method_call) {
                 Some(method_ty) => {
                     // If this is an index implemented by a method call, then it
                     // will include an implicit deref of the result.
@@ -514,7 +527,8 @@ impl<'t, 'a,'tcx> MemCategorizationContext<'t, 'a, 'tcx> {
           }
 
           hir::ExprPath(..) => {
-            let def = self.tcx().def_map.borrow().get(&expr.id).unwrap().full_def();
+            let tcx = self.tcx();
+            let def = tcx.def_map.borrow().get(&expr.id).unwrap().full_def();
             self.cat_def(expr.id, expr.span, expr_ty, def)
           }
 
@@ -582,7 +596,7 @@ impl<'t, 'a,'tcx> MemCategorizationContext<'t, 'a, 'tcx> {
               let ty = try!(self.node_ty(fn_node_id));
               match ty.sty {
                   ty::TyClosure(closure_id, _) => {
-                      match self.typer.closure_kind(closure_id) {
+                      match self.typer.borrow().closure_kind(closure_id) {
                           Some(kind) => {
                               self.cat_upvar(id, span, var_id, fn_node_id, kind)
                           }
@@ -656,7 +670,7 @@ impl<'t, 'a,'tcx> MemCategorizationContext<'t, 'a, 'tcx> {
         let var_ty = try!(self.node_ty(var_id));
 
         // Mutability of original variable itself
-        let var_mutbl = MutabilityCategory::from_local(self.tcx(), var_id);
+        let var_mutbl = MutabilityCategory::from_local(&*self.tcx(), var_id);
 
         // Construct the upvar. This represents access to the field
         // from the environment (perhaps we should eventually desugar
@@ -690,7 +704,7 @@ impl<'t, 'a,'tcx> MemCategorizationContext<'t, 'a, 'tcx> {
         // for that.
         let upvar_id = ty::UpvarId { var_id: var_id,
                                      closure_expr_id: fn_node_id };
-        let upvar_capture = self.typer.upvar_capture(upvar_id).unwrap();
+        let upvar_capture = self.typer.borrow().upvar_capture(upvar_id).unwrap();
         let cmt_result = match upvar_capture {
             ty::UpvarCapture::ByValue => {
                 cmt_result
@@ -788,7 +802,7 @@ impl<'t, 'a,'tcx> MemCategorizationContext<'t, 'a, 'tcx> {
     /// Returns the lifetime of a temporary created by expr with id `id`.
     /// This could be `'static` if `id` is part of a constant expression.
     pub fn temporary_scope(&self, id: ast::NodeId) -> ty::Region {
-        match self.typer.temporary_scope(id) {
+        match self.typer.borrow().temporary_scope(id) {
             Some(scope) => ty::ReScope(scope),
             None => ty::ReStatic
         }
@@ -799,7 +813,8 @@ impl<'t, 'a,'tcx> MemCategorizationContext<'t, 'a, 'tcx> {
                            span: Span,
                            expr_ty: Ty<'tcx>)
                            -> cmt<'tcx> {
-        let qualif = self.tcx().const_qualif_map.borrow().get(&id).cloned()
+        let tcx = self.tcx();
+        let qualif = tcx.const_qualif_map.borrow().get(&id).cloned()
                                .unwrap_or(check_const::ConstQualif::NOT_CONST);
 
         // Only promote `[T; 0]` before an RFC for rvalue promotions
@@ -885,7 +900,8 @@ impl<'t, 'a,'tcx> MemCategorizationContext<'t, 'a, 'tcx> {
             expr_id: node.id(),
             autoderef: deref_cnt as u32
         };
-        let method_ty = self.typer.node_method_ty(method_call);
+
+        let method_ty = self.typer.borrow_mut().node_method_ty(method_call);
 
         debug!("cat_deref: method_call={:?} method_ty={:?}",
                method_call, method_ty.map(|ty| ty));
@@ -980,7 +996,7 @@ impl<'t, 'a,'tcx> MemCategorizationContext<'t, 'a, 'tcx> {
         //! - `base_cmt`: the cmt of `elt`
 
         let method_call = ty::MethodCall::expr(elt.id());
-        let method_ty = self.typer.node_method_ty(method_call);
+        let method_ty = self.typer.borrow_mut().node_method_ty(method_call);
 
         let element_ty = match method_ty {
             Some(method_ty) => {
@@ -1074,7 +1090,7 @@ impl<'t, 'a,'tcx> MemCategorizationContext<'t, 'a, 'tcx> {
                              slice_pat: &hir::Pat)
                              -> McResult<(cmt<'tcx>, hir::Mutability, ty::Region)> {
         let slice_ty = try!(self.node_ty(slice_pat.id));
-        let (slice_mutbl, slice_r) = vec_slice_info(self.tcx(),
+        let (slice_mutbl, slice_r) = vec_slice_info(&*self.tcx(),
                                                     slice_pat,
                                                     slice_ty);
         let context = InteriorOffsetKind::Pattern;
