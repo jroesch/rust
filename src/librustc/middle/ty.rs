@@ -1989,7 +1989,7 @@ pub enum TypeError<'tcx> {
 #[derive(PartialEq, Eq, Hash, Clone)]
 pub struct ExistentialBounds<'tcx> {
     pub region_bound: ty::Region,
-    pub builtin_bounds: BuiltinBounds,
+    pub builtin_bounds: Vec<PolyTraitPredicate<'tcx>>,
     pub projection_bounds: Vec<PolyProjectionPredicate<'tcx>>,
 }
 
@@ -2526,6 +2526,12 @@ impl<'tcx> ToPredicate<'tcx> for TraitRef<'tcx> {
         ty::Predicate::Trait(ty::Binder(ty::TraitPredicate {
             trait_ref: self.clone()
         }))
+    }
+}
+
+impl<'tcx> ToPredicate<'tcx> for PolyTraitPredicate<'tcx> {
+    fn to_predicate(&self) -> Predicate<'tcx> {
+        ty::Predicate::Trait(self.clone())
     }
 }
 
@@ -4157,7 +4163,7 @@ impl<'tcx> TyS<'tcx> {
                 }
 
                 TyTrait(box TraitTy { ref bounds, .. }) => {
-                    object_contents(bounds) | TC::ReachesFfiUnsafe | TC::Nonsized
+                    object_contents(cx, bounds) | TC::ReachesFfiUnsafe | TC::Nonsized
                 }
 
                 TyRawPtr(ref mt) => {
@@ -4306,17 +4312,17 @@ impl<'tcx> TyS<'tcx> {
             b | (TC::ReachesBorrowed).when(region != ty::ReStatic)
         }
 
-        fn object_contents(bounds: &ExistentialBounds) -> TypeContents {
+        fn object_contents(cx: &ctxt, bounds: &ExistentialBounds) -> TypeContents {
             // These are the type contents of the (opaque) interior. We
             // make no assumptions (other than that it cannot have an
             // in-scope type parameter within, which makes no sense).
             let mut tc = TC::All - TC::InteriorParam;
-            for bound in &bounds.builtin_bounds {
-                tc = tc - match bound {
-                    BoundSync | BoundSend | BoundCopy => TC::None,
-                    BoundSized => TC::Nonsized,
-                };
-            }
+            let sized_def_id = cx.lang_items.from_builtin_kind(BoundSized).unwrap();
+            tc = tc - if bounds.builtin_bounds.iter().any(|b| b.0.trait_ref.def_id == sized_def_id) {
+                TC::Nonsized
+            } else {
+                TC::None
+            };
             return tc;
         }
     }

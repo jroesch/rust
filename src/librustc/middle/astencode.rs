@@ -720,7 +720,7 @@ trait rbml_writer_helpers<'tcx> {
                        substs: &subst::Substs<'tcx>);
     fn emit_existential_bounds<'b>(&mut self, ecx: &e::EncodeContext<'b,'tcx>,
                                    bounds: &ty::ExistentialBounds<'tcx>);
-    fn emit_builtin_bounds(&mut self, ecx: &e::EncodeContext, bounds: &ty::BuiltinBounds);
+    fn emit_builtin_bounds<'b>(&mut self, ecx: &e::EncodeContext<'b, 'tcx>, bounds: &Vec<ty::PolyTraitPredicate<'tcx>>);
     fn emit_auto_adjustment<'a>(&mut self, ecx: &e::EncodeContext<'a, 'tcx>,
                                 adj: &ty::AutoAdjustment<'tcx>);
     fn emit_autoref<'a>(&mut self, autoref: &ty::AutoRef<'tcx>);
@@ -801,7 +801,8 @@ impl<'a, 'tcx> rbml_writer_helpers<'tcx> for Encoder<'a> {
                                                                     bounds)));
     }
 
-    fn emit_builtin_bounds(&mut self, ecx: &e::EncodeContext, bounds: &ty::BuiltinBounds) {
+    fn emit_builtin_bounds<'b>(&mut self, ecx: &e::EncodeContext<'b, 'tcx>,
+                                          bounds: &Vec<ty::PolyTraitPredicate<'tcx>>) {
         self.emit_opaque(|this| Ok(tyencode::enc_builtin_bounds(this,
                                                                 &ecx.ty_str_ctxt(),
                                                                 bounds)));

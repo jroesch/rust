@@ -204,9 +204,9 @@ pub fn parse_existential_bounds_data<'tcx, F>(data: &[u8], crate_num: ast::Crate
     parse_existential_bounds(&mut st, conv)
 }
 
-pub fn parse_builtin_bounds_data<F>(data: &[u8], crate_num: ast::CrateNum,
-                                    pos: usize, tcx: &ty::ctxt, conv: F)
-                                    -> ty::BuiltinBounds where
+pub fn parse_builtin_bounds_data<'tcx, F>(data: &[u8], crate_num: ast::CrateNum,
+                                    pos: usize, tcx: &ty::ctxt<'tcx>, conv: F)
+                                    -> Vec<ty::PolyTraitPredicate<'tcx>> where
     F: FnMut(DefIdSource, ast::DefId) -> ast::DefId,
 {
     let mut st = parse_state_from_data(data, crate_num, pos, tcx);
@@ -892,30 +892,24 @@ fn parse_existential_bounds_<'a,'tcx, F>(st: &mut PState<'a,'tcx>,
                                    projection_bounds: projection_bounds };
 }
 
-fn parse_builtin_bounds<F>(st: &mut PState, mut _conv: F) -> ty::BuiltinBounds where
+fn parse_builtin_bounds<'a, 'tcx, F>(st: &mut PState<'a, 'tcx>, mut _conv: F) -> Vec<ty::PolyTraitPredicate<'tcx>> where
     F: FnMut(DefIdSource, ast::DefId) -> ast::DefId,
 {
     parse_builtin_bounds_(st, &mut _conv)
 }
 
-fn parse_builtin_bounds_<F>(st: &mut PState, _conv: &mut F) -> ty::BuiltinBounds where
+fn parse_builtin_bounds_<'a, 'tcx, F>(st: &mut PState<'a, 'tcx>, _conv: &mut F) -> Vec<ty::PolyTraitPredicate<'tcx>>  where
     F: FnMut(DefIdSource, ast::DefId) -> ast::DefId,
 {
-    let mut builtin_bounds = ty::BuiltinBounds::empty();
+    let mut builtin_bounds = Vec::new();
 
     loop {
         match next(st) {
             'S' => {
-                builtin_bounds.insert(ty::BoundSend);
-            }
-            'Z' => {
-                builtin_bounds.insert(ty::BoundSized);
-            }
-            'P' => {
-                builtin_bounds.insert(ty::BoundCopy);
-            }
-            'T' => {
-                builtin_bounds.insert(ty::BoundSync);
+                builtin_bounds.push(
+                    ty::Binder(ty::TraitPredicate {
+                        trait_ref: parse_trait_ref_(st, _conv)
+                    }))
             }
             '.' => {
                 return builtin_bounds;

@@ -103,7 +103,7 @@ impl<'a, 'tcx> Implicator<'a, 'tcx> {
 
             ty::TyTrait(ref t) => {
                 let required_region_bounds =
-                    object_region_bounds(self.tcx(), &t.principal, t.bounds.builtin_bounds);
+                    object_region_bounds(self.tcx(), &t.principal, &t.bounds.builtin_bounds);
                 self.accumulate_from_object_ty(ty, t.bounds.region_bound, required_region_bounds)
             }
 
@@ -427,7 +427,7 @@ impl<'a, 'tcx> Implicator<'a, 'tcx> {
 pub fn object_region_bounds<'tcx>(
     tcx: &ty::ctxt<'tcx>,
     principal: &ty::PolyTraitRef<'tcx>,
-    others: ty::BuiltinBounds)
+    others: &Vec<ty::PolyTraitPredicate<'tcx>>)
     -> Vec<ty::Region>
 {
     // Since we don't actually *know* the self type for an object,
@@ -440,7 +440,7 @@ pub fn object_region_bounds<'tcx>(
     let substs = tcx.mk_substs(principal.0.substs.with_self_ty(open_ty));
     let trait_refs = vec!(ty::Binder(ty::TraitRef::new(principal.0.def_id, substs)));
 
-    let mut predicates = others.to_predicates(tcx, open_ty);
+    let mut predicates: Vec<_> = others.iter().map(|o| o.to_predicate()).collect();
     predicates.extend(trait_refs.iter().map(|t| t.to_predicate()));
 
     tcx.required_region_bounds(open_ty, predicates)

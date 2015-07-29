@@ -698,7 +698,7 @@ pub fn super_fold_existential_bounds<'tcx, T: TypeFolder<'tcx>>(
 {
     ty::ExistentialBounds {
         region_bound: bounds.region_bound.fold_with(this),
-        builtin_bounds: bounds.builtin_bounds,
+        builtin_bounds: bounds.builtin_bounds.fold_with(this),
         projection_bounds: bounds.projection_bounds.fold_with(this),
     }
 }

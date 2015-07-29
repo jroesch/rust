@@ -391,20 +391,20 @@ impl<'a,'tcx:'a> Relate<'a,'tcx> for ty::ExistentialBounds<'tcx> {
     }
 }
 
-impl<'a,'tcx:'a> Relate<'a,'tcx> for ty::BuiltinBounds {
+impl<'a,'tcx:'a> Relate<'a,'tcx> for Vec<ty::PolyTraitPredicate<'tcx>> {
     fn relate<R>(relation: &mut R,
-                 a: &ty::BuiltinBounds,
-                 b: &ty::BuiltinBounds)
-                 -> RelateResult<'tcx, ty::BuiltinBounds>
+                 a: &Vec<ty::PolyTraitPredicate<'tcx>>,
+                 b: &Vec<ty::PolyTraitPredicate<'tcx>>)
+                 -> RelateResult<'tcx, Vec<ty::PolyTraitPredicate<'tcx>>>
         where R: TypeRelation<'a,'tcx>
     {
-        // Two sets of builtin bounds are only relatable if they are
-        // precisely the same (but see the coercion code).
-        if a != b {
-            Err(TypeError::BuiltinBoundsMismatch(expected_found(relation, a, b)))
-        } else {
-            Ok(*a)
-        }
+        let result: Result<Vec<_>, _> =
+            a.iter()
+             .zip(b.iter())
+             .map(|(x, y)| relation.relate(&x.0.trait_ref, &y.0.trait_ref).map(|r|
+                 ty::Binder(ty::TraitPredicate { trait_ref: r })))
+             .collect();
+        return result;
     }
 }
 

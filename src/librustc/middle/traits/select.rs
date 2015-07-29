@@ -1336,8 +1336,11 @@ impl<'cx, 'tcx> SelectionContext<'cx, 'tcx> {
             let poly_trait_ref = match self_ty.sty {
                 ty::TyTrait(ref data) => {
                     match self.tcx().lang_items.to_builtin_kind(obligation.predicate.def_id()) {
-                        Some(bound @ ty::BoundSend) | Some(bound @ ty::BoundSync) => {
-                            if data.bounds.builtin_bounds.contains(bound) {
+                        Some(ty::BoundSend) | Some(ty::BoundSync) => {
+                            if data.bounds
+                                   .builtin_bounds
+                                   .iter()
+                                   .any(|b| b.0.trait_ref.def_id == obligation.predicate.def_id()) {
                                 debug!("assemble_candidates_from_object_ty: matched builtin bound, \
                                         pushing candidate");
                                 candidates.vec.push(BuiltinObjectCandidate);
@@ -1346,7 +1349,6 @@ impl<'cx, 'tcx> SelectionContext<'cx, 'tcx> {
                         }
                         _ => {}
                     }
-
                     data.principal_trait_ref_with_self_ty(self.tcx(), self_ty)
                 }
                 ty::TyInfer(ty::TyVar(_)) => {
@@ -1430,7 +1432,8 @@ impl<'cx, 'tcx> SelectionContext<'cx, 'tcx> {
                 // We always upcast when we can because of reason
                 // #2 (region bounds).
                 data_a.principal.def_id() == data_a.principal.def_id() &&
-                data_a.bounds.builtin_bounds.is_superset(&data_b.bounds.builtin_bounds)
+                // Compute if the bounds of data_b appear in data a (i.e is a superset of b)
+                data_b.bounds.builtin_bounds.iter().all(|b| data_a.bounds.builtin_bounds.contains(b))
             }
 
             // T -> Trait.
@@ -1635,7 +1638,13 @@ impl<'cx, 'tcx> SelectionContext<'cx, 'tcx> {
                 match bound {
                     ty::BoundSized => Err(Unimplemented),
                     ty::BoundCopy => {
-                        if data.bounds.builtin_bounds.contains(bound) {
+                        let bound_def_id =
+                            self.tcx()
+                                .lang_items
+                                .from_builtin_kind(bound)
+                                .unwrap();
+
+                        if data.bounds.builtin_bounds.iter().any(|b| b.0.trait_ref.def_id == bound_def_id) {
                             ok_if(Vec::new())
                         } else {
                             // Recursively check all supertraits to find out if any further
@@ -2460,7 +2469,7 @@ impl<'cx, 'tcx> SelectionContext<'cx, 'tcx> {
                 // See assemble_candidates_for_unsizing for more info.
                 let bounds = ty::ExistentialBounds {
                     region_bound: data_b.bounds.region_bound,
-                    builtin_bounds: data_b.bounds.builtin_bounds,
+                    builtin_bounds: data_b.bounds.builtin_bounds.clone(),
                     projection_bounds: data_a.bounds.projection_bounds.clone(),
                 };
 
@@ -2501,19 +2510,26 @@ impl<'cx, 'tcx> SelectionContext<'cx, 'tcx> {
                 push(data.principal_trait_ref_with_self_ty(tcx, source).to_predicate());
 
                 // We can only make objects from sized types.
-                let mut builtin_bounds = data.bounds.builtin_bounds;
-                builtin_bounds.insert(ty::BoundSized);
+                let mut builtin_bounds = data.bounds.builtin_bounds.clone();
+
+                let trait_ref = match util::trait_ref_for_builtin_bound(tcx, ty::BoundSized, source) {
+                    Err(_) => return Err(Unimplemented),
+                    Ok(tr) => tr
+                };
+
+                let sized_predicate = ty::Binder(ty::TraitPredicate {
+                    trait_ref: trait_ref
+                });
+
+                // @jroesch we may need to do more here?
+                builtin_bounds.push(sized_predicate);
 
                 // Create additional obligations for all the various builtin
                 // bounds attached to the object cast. (In other words, if the
                 // object type is Foo+Send, this would create an obligation
                 // for the Send check.)
                 for bound in &builtin_bounds {
-                    if let Ok(tr) = util::trait_ref_for_builtin_bound(tcx, bound, source) {
-                        push(tr.to_predicate());
-                    } else {
-                        return Err(Unimplemented);
-                    }
+                    push(bound.to_predicate());
                 }
 
                 // Create obligations for the projection predicates.

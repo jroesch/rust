@@ -364,14 +364,10 @@ fn enc_fn_sig<'a, 'tcx>(w: &mut Encoder, cx: &ctxt<'a, 'tcx>,
     }
 }
 
-pub fn enc_builtin_bounds(w: &mut Encoder, _cx: &ctxt, bs: &ty::BuiltinBounds) {
+pub fn enc_builtin_bounds<'a, 'tcx>(w: &mut Encoder, _cx: &ctxt<'a, 'tcx>, bs: &Vec<ty::PolyTraitPredicate<'tcx>>) {
     for bound in bs {
-        match bound {
-            ty::BoundSend => mywrite!(w, "S"),
-            ty::BoundSized => mywrite!(w, "Z"),
-            ty::BoundCopy => mywrite!(w, "P"),
-            ty::BoundSync => mywrite!(w, "T"),
-        }
+        mywrite!(w, "S");
+        enc_trait_ref(w, _cx, bound.0.trait_ref);
     }
 
     mywrite!(w, ".");

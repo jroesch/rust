@@ -2023,6 +2023,27 @@ pub fn conv_existential_bounds_from_partitioned_bounds<'tcx>(
                             region_bounds } =
         partitioned_bounds;
 
+    let builtin_bounds: Vec<_> =
+        builtin_bounds
+            .iter()
+            .map(|b| {
+                let trait_def_id =
+                    this.tcx()
+                        .lang_items
+                        .from_builtin_kind(b)
+                        .unwrap();
+
+                let trait_ref = ty::TraitRef {
+                    def_id: trait_def_id,
+                    substs: this.tcx().mk_substs(Substs::empty())
+                };
+
+                ty::Binder(ty::TraitPredicate {
+                    trait_ref: trait_ref
+                })
+            })
+            .collect();
+
     if !trait_bounds.is_empty() {
         let b = &trait_bounds[0];
         span_err!(this.tcx().sess, b.trait_ref.path.span, E0225,
@@ -2034,7 +2055,7 @@ pub fn conv_existential_bounds_from_partitioned_bounds<'tcx>(
                                       span,
                                       &region_bounds,
                                       principal_trait_ref,
-                                      builtin_bounds);
+                                      &builtin_bounds);
 
     let region_bound = match region_bound {
         Some(r) => r,
@@ -2071,7 +2092,7 @@ fn compute_object_lifetime_bound<'tcx>(
     span: Span,
     explicit_region_bounds: &[&ast::Lifetime],
     principal_trait_ref: ty::PolyTraitRef<'tcx>,
-    builtin_bounds: ty::BuiltinBounds)
+    builtin_bounds: &Vec<ty::PolyTraitPredicate<'tcx>>)
     -> Option<ty::Region> // if None, use the default
 {
     let tcx = this.tcx();
