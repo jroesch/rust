@@ -1818,7 +1818,8 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
                                 conflicts.push((*ty, default));
                             }
                         }
-                    } else {
+                    } // else {
+                        // unconditionally apply the literal fallback as well
                         match self.infcx().type_is_unconstrained_numeric(ty) {
                             UnconstrainedInt => {
                                 demand::eqtype(self, codemap::DUMMY_SP, *ty, self.tcx().types.i32)
@@ -1828,7 +1829,7 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
                             }
                             Neither => {}
                         }
-                    }
+                    // }
                 }
 
 

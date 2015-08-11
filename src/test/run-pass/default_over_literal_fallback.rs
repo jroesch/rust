@@ -12,4 +12,6 @@
 
 fn foo<T=u64>(t: T) -> usize { std::mem::size_of_val(&t) }
 
+// This should fail on this branch.
+
 fn main() { assert_eq!(foo(22), std::mem::size_of::<u64>()) }
