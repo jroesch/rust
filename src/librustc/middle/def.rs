@@ -59,6 +59,7 @@ pub enum Def {
 /// were no errors, all paths should be fully resolved, with `depth`
 /// set to `0` and `base_def` representing the final resolution.
 ///
+/// ```{.text}
 ///     module::Type::AssocX::AssocY::MethodOrAssocType
 ///     ^~~~~~~~~~~~  ^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 ///     base_def      depth = 3
@@ -66,6 +67,7 @@ pub enum Def {
 ///     <T as Trait>::AssocX::AssocY::MethodOrAssocType
 ///           ^~~~~~~~~~~~~~  ^~~~~~~~~~~~~~~~~~~~~~~~~
 ///           base_def        depth = 2
+/// ```
 #[derive(Copy, Clone, Debug)]
 pub struct PathResolution {
     pub base_def: Def,

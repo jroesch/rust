@@ -924,6 +924,7 @@ pub enum Expr_ {
 /// separately. `position` represents the index of the associated
 /// item qualified with this Self type.
 ///
+/// ```{.text}
 ///     <Vec<T> as a::b::Trait>::AssociatedItem
 ///      ^~~~~     ~~~~~~~~~~~~~~^
 ///      ty        position = 3
@@ -931,6 +932,7 @@ pub enum Expr_ {
 ///     <Vec<T>>::AssociatedItem
 ///      ^~~~~    ^
 ///      ty       position = 0
+/// ```
 #[derive(Clone, PartialEq, Eq, RustcEncodable, RustcDecodable, Hash, Debug)]
 pub struct QSelf {
     pub ty: P<Ty>,

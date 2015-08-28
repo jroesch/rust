@@ -99,28 +99,7 @@ pub type _Unwind_Exception_Cleanup_Fn =
         extern "C" fn(unwind_code: _Unwind_Reason_Code,
                       exception: *mut _Unwind_Exception);
 
-#[cfg(any(all(target_os = "linux", not(target_env = "musl")),
-          target_os = "freebsd"))]
-#[link(name = "gcc_s")]
-extern {}
-
-#[cfg(all(target_os = "linux", target_env = "musl", not(test)))]
-#[link(name = "unwind", kind = "static")]
-extern {}
-
-#[cfg(any(target_os = "android", target_os = "netbsd", target_os = "openbsd"))]
-#[link(name = "gcc")]
-extern {}
-
-#[cfg(target_os = "dragonfly")]
-#[link(name = "gcc_pic")]
-extern {}
-
-#[cfg(target_os = "bitrig")]
-#[link(name = "c++abi")]
-extern {}
-
-extern "C" {
+extern {
     // iOS on armv7 uses SjLj exceptions and requires to link
     // against corresponding routine (..._SjLj_...)
     #[cfg(not(all(target_os = "ios", target_arch = "arm")))]

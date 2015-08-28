@@ -350,8 +350,6 @@ pub struct EXCEPTION_POINTERS {
 pub type PVECTORED_EXCEPTION_HANDLER = extern "system"
         fn(ExceptionInfo: *mut EXCEPTION_POINTERS) -> LONG;
 
-#[link(name = "ws2_32")]
-#[link(name = "userenv")]
 extern "system" {
     pub fn WSAStartup(wVersionRequested: libc::WORD,
                       lpWSAData: LPWSADATA) -> libc::c_int;

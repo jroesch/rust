@@ -75,17 +75,6 @@ mod inner {
         t: libc::timespec,
     }
 
-    // Apparently android provides this in some other library?
-    // Bitrig's RT extensions are in the C library, not a separate librt
-    // OpenBSD provide it via libc
-    #[cfg(not(any(target_os = "android",
-                  target_os = "bitrig",
-                  target_os = "netbsd",
-                  target_os = "openbsd",
-                  target_env = "musl")))]
-    #[link(name = "rt")]
-    extern {}
-
     extern {
         fn clock_gettime(clk_id: libc::c_int, tp: *mut libc::timespec) -> libc::c_int;
     }

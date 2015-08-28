@@ -1,0 +1,38 @@
+[package]
+authors = ["The Rust Project Developers"]
+name = "rustc-main"
+version = "0.0.0"
+
+[[bin]]
+name = "rustc"
+path = "main.rs"
+
+[lib]
+name = "std_shim"
+path = "lib.rs"
+
+[profile.release]
+opt-level = 2
+codegen-units = 4
+
+[profile.dev]
+debug = false
+debug-assertions = false
+
+[dependencies]
+rustc_driver = { path = "../librustc_driver", optional = true }
+rustc_back = { path = "../librustc_back", optional = true }
+std = { path = "../libstd", optional = true }
+
+[features]
+rustc = ["rustc_driver", "rustc_back"]
+rustc-with-jemalloc = ["rustc_back/jemalloc"]
+rustc-stage0 = []
+rustc-not-stage0 = []
+
+build-std = ["std"]
+std-stage0 = ["std/stage0"]
+std-not-stage0 = ["std/not-stage0"]
+elf-tls = ["std/elf-tls"]
+std-with-jemalloc = ["std/jemalloc"]
+debug-jemalloc = ["std/debug-jemalloc"]

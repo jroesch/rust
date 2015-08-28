@@ -14,6 +14,7 @@
 #![staged_api]
 #![no_std]
 #![cfg_attr(not(stage0), allocator)]
+#![cfg_attr(not(stage0), deny(warnings))]
 #![unstable(feature = "alloc_system",
             reason = "this library is unlikely to be stabilized in its current \
                       form or name",

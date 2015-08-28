@@ -18,6 +18,7 @@
             reason = "this library is unlikely to be stabilized in its current \
                       form or name",
             issue = "27783")]
+#![cfg_attr(not(stage0), deny(warnings))]
 #![feature(allocator)]
 #![feature(libc)]
 #![feature(no_std)]
@@ -27,7 +28,6 @@ extern crate libc;
 
 use libc::{c_int, c_void, size_t};
 
-#[link(name = "jemalloc", kind = "static")]
 extern {
     fn je_mallocx(size: size_t, flags: c_int) -> *mut c_void;
     fn je_rallocx(ptr: *mut c_void, size: size_t, flags: c_int) -> *mut c_void;
@@ -36,13 +36,6 @@ extern {
     fn je_sdallocx(ptr: *mut c_void, size: size_t, flags: c_int);
     fn je_nallocx(size: size_t, flags: c_int) -> size_t;
 }
-
-// -lpthread needs to occur after -ljemalloc, the earlier argument isn't enough
-#[cfg(all(not(windows),
-          not(target_os = "android"),
-          not(target_env = "musl")))]
-#[link(name = "pthread")]
-extern {}
 
 // The minimum alignment guaranteed by the architecture. This value is used to
 // add fast paths for low alignment values. In practice, the alignment is a

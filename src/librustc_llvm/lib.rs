@@ -24,6 +24,7 @@
 #![doc(html_logo_url = "https://www.rust-lang.org/logos/rust-logo-128x128-blk-v2.png",
        html_favicon_url = "https://doc.rust-lang.org/favicon.ico",
        html_root_url = "https://doc.rust-lang.org/nightly/")]
+#![cfg_attr(not(stage0), deny(warnings))]
 
 #![feature(associated_consts)]
 #![feature(box_syntax)]
@@ -31,7 +32,7 @@
 #![feature(link_args)]
 #![feature(staged_api)]
 #![feature(vec_push_all)]
-#![feature(linked_from)]
+#![cfg_attr(not(stage0), feature(linked_from))]
 
 extern crate libc;
 #[macro_use] #[no_link] extern crate rustc_bitflags;
@@ -588,18 +589,7 @@ pub mod debuginfo {
 }
 
 
-// Link to our native llvm bindings (things that we need to use the C++ api
-// for) and because llvm is written in C++ we need to link against libstdc++
-//
-// You'll probably notice that there is an omission of all LLVM libraries
-// from this location. This is because the set of LLVM libraries that we
-// link to is mostly defined by LLVM, and the `llvm-config` tool is used to
-// figure out the exact set of libraries. To do this, the build system
-// generates an llvmdeps.rs file next to this one which will be
-// automatically updated whenever LLVM is updated to include an up-to-date
-// set of the libraries we need to link to LLVM for.
-#[link(name = "rustllvm", kind = "static")]
-#[linked_from = "rustllvm"] // not quite true but good enough
+#[cfg_attr(not(stage0), linked_from = "rustllvm")] // not quite true but good enough
 extern {
     /* Create and destroy contexts. */
     pub fn LLVMContextCreate() -> ContextRef;
@@ -2332,6 +2322,7 @@ pub unsafe fn debug_loc_to_string(c: ContextRef, tr: DebugLocRef) -> String {
 // parts of LLVM that rustllvm depends on aren't thrown away by the linker.
 // Works to the above fix for #15460 to ensure LLVM dependencies that
 // are only used by rustllvm don't get stripped by the linker.
+#[cfg(not(feature = "cargo"))]
 mod llvmdeps {
     include! { env!("CFG_LLVM_LINKAGE_FILE") }
 }

@@ -24,6 +24,7 @@
 #![doc(html_logo_url = "https://www.rust-lang.org/logos/rust-logo-128x128-blk-v2.png",
        html_favicon_url = "https://doc.rust-lang.org/favicon.ico",
        html_root_url = "https://doc.rust-lang.org/nightly/")]
+#![cfg_attr(not(stage0), deny(warnings))]
 
 #![feature(libc)]
 #![feature(staged_api)]
@@ -77,7 +78,6 @@ impl Drop for Bytes {
     }
 }
 
-#[link(name = "miniz", kind = "static")]
 extern {
     /// Raw miniz compression function.
     fn tdefl_compress_mem_to_heap(psrc_buf: *const c_void,

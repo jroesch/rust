@@ -209,8 +209,7 @@ mod imp {
     #[allow(non_upper_case_globals)]
     const kSecRandomDefault: *const SecRandom = 0 as *const SecRandom;
 
-    #[link(name = "Security", kind = "framework")]
-    extern "C" {
+    extern {
         fn SecRandomCopyBytes(rnd: *const SecRandom,
                               count: size_t, bytes: *mut u8) -> c_int;
     }
@@ -275,7 +274,6 @@ mod imp {
     const CRYPT_VERIFYCONTEXT: DWORD = 0xF0000000;
 
     #[allow(non_snake_case)]
-    #[link(name = "advapi32")]
     extern "system" {
         fn CryptAcquireContextA(phProv: *mut HCRYPTPROV,
                                 pszContainer: LPCSTR,

@@ -1,0 +1,21 @@
+[package]
+authors = ["The Rust Project Developers"]
+name = "alloc"
+version = "0.0.0"
+
+[lib]
+name = "alloc"
+path = "lib.rs"
+
+[dependencies]
+core = { path = "../libcore" }
+libc = { path = "../liblibc" }
+alloc_system = { path = "../liballoc_system", optional = true }
+
+[dev-dependencies]
+std = { path = "../libstd" }
+log = { path = "../liblog" }
+test = { path = "../libtest" }
+
+[features]
+stage0 = ["alloc_system"]

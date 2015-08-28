@@ -311,15 +311,11 @@ pub fn args() -> Args {
 pub fn args() -> Args {
     use mem;
 
-    #[link(name = "objc")]
     extern {
         fn sel_registerName(name: *const libc::c_uchar) -> Sel;
         fn objc_msgSend(obj: NsId, sel: Sel, ...) -> NsId;
         fn objc_getClass(class_name: *const libc::c_uchar) -> NsId;
     }
-
-    #[link(name = "Foundation", kind = "framework")]
-    extern {}
 
     type Sel = *const libc::c_void;
     type NsId = *const libc::c_void;

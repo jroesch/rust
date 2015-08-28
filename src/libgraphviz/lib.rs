@@ -174,7 +174,7 @@
 //!         dot::Id::new(format!("N{}", n)).unwrap()
 //!     }
 //!     fn node_label<'b>(&'b self, n: &Nd) -> dot::LabelText<'b> {
-//!         dot::LabelText::LabelStr(self.nodes[*n].as_slice().into_cow())
+//!         dot::LabelText::LabelStr(self.nodes[*n].into_cow())
 //!     }
 //!     fn edge_label<'b>(&'b self, _: &Ed) -> dot::LabelText<'b> {
 //!         dot::LabelText::LabelStr("&sube;".into_cow())
@@ -284,6 +284,7 @@
 #![doc(html_logo_url = "https://www.rust-lang.org/logos/rust-logo-128x128-blk-v2.png",
        html_favicon_url = "https://doc.rust-lang.org/favicon.ico",
        html_root_url = "https://doc.rust-lang.org/nightly/")]
+#![cfg_attr(not(stage0), deny(warnings))]
 
 #![feature(into_cow)]
 #![feature(str_escape)]

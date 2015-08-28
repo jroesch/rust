@@ -437,9 +437,9 @@ impl Target {
 }
 
 fn best_allocator() -> String {
-    if cfg!(disable_jemalloc) {
-        "alloc_system".to_string()
-    } else {
+    if cfg!(feature = "jemalloc") {
         "alloc_jemalloc".to_string()
+    } else {
+        "alloc_system".to_string()
     }
 }

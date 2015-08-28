@@ -27,6 +27,7 @@ Core encoding and decoding interfaces.
        html_favicon_url = "https://doc.rust-lang.org/favicon.ico",
        html_root_url = "https://doc.rust-lang.org/nightly/",
        html_playground_url = "https://play.rust-lang.org/")]
+#![cfg_attr(not(stage0), deny(warnings))]
 
 #![feature(box_syntax)]
 #![feature(collections)]

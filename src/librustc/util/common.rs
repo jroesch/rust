@@ -207,7 +207,7 @@ pub fn block_query<P>(b: &ast::Block, p: P) -> bool where P: FnMut(&ast::Expr) -
 /// a type implementing MutableMap to serve as a cache.
 ///
 /// In the future the signature of this function is expected to be:
-/// ```
+/// ```rust,ignore
 /// pub fn memoized<T: Clone, U: Clone, M: MutableMap<T, U>>(
 ///    cache: &RefCell<M>,
 ///    f: &|T| -> U
@@ -216,7 +216,7 @@ pub fn block_query<P>(b: &ast::Block, p: P) -> bool where P: FnMut(&ast::Expr) -
 /// but currently it is not possible.
 ///
 /// # Examples
-/// ```
+/// ```rust,ignore
 /// struct Context {
 ///    cache: RefCell<HashMap<usize, usize>>
 /// }

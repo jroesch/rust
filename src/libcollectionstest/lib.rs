@@ -8,6 +8,8 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
+#![cfg_attr(not(stage0), deny(warnings))
+
 #![feature(ascii)]
 #![feature(append)]
 #![feature(box_syntax)]
@@ -49,7 +51,7 @@ extern crate rustc_unicode;
 
 use std::hash::{Hash, Hasher, SipHasher};
 
-#[cfg(test)] #[macro_use] mod bench;
+#[macro_use] mod bench;
 
 mod binary_heap;
 mod btree;

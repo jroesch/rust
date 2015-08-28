@@ -13,6 +13,7 @@
 //! # Examples
 //!
 //! ```
+//! #![feature(rustc_private)]
 //! #[macro_use] extern crate log;
 //!
 //! fn main() {
@@ -169,6 +170,7 @@
        html_root_url = "https://doc.rust-lang.org/nightly/",
        html_playground_url = "https://play.rust-lang.org/")]
 #![deny(missing_docs)]
+#![cfg_attr(not(stage0), deny(warnings))]
 
 #![feature(box_raw)]
 #![feature(box_syntax)]

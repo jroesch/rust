@@ -73,6 +73,7 @@
        test(no_crate_inject))]
 #![no_std]
 #![cfg_attr(not(stage0), needs_allocator)]
+#![cfg_attr(not(stage0), deny(warnings))]
 
 #![feature(allocator)]
 #![feature(box_syntax)]
@@ -106,7 +107,6 @@
 extern crate alloc_system;
 
 // Allow testing this library
-
 #[cfg(test)] #[macro_use] extern crate std;
 #[cfg(test)] #[macro_use] extern crate log;
 

@@ -1,0 +1,24 @@
+[package]
+authors = ["The Rust Project Developers"]
+name = "alloc_jemalloc"
+version = "0.0.0"
+build = "build.rs"
+links = "jemalloc"
+
+[lib]
+name = "alloc_jemalloc"
+path = "lib.rs"
+
+[dependencies]
+core = { path = "../libcore" }
+libc = { path = "../liblibc" }
+
+[build-dependencies]
+build_helper = { path = "../build_helper" }
+
+[dev-dependencies]
+std = { path = "../libstd" }
+test = { path = "../libtest" }
+
+[features]
+debug = []

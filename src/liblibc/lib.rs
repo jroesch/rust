@@ -23,6 +23,7 @@
        html_root_url = "https://doc.rust-lang.org/nightly/",
        html_playground_url = "https://play.rust-lang.org/",
        issue_tracker_base_url = "https://github.com/rust-lang/rust/issues/")]
+#![cfg_attr(not(stage0), deny(warnings))]
 #![cfg_attr(test, feature(test))]
 
 //! Bindings for the C standard library and other platform libraries

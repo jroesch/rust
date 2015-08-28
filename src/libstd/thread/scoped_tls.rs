@@ -83,7 +83,7 @@ macro_rules! scoped_thread_local {
            reason = "should not be necessary")]
 #[macro_export]
 #[allow_internal_unstable]
-#[cfg(no_elf_tls)]
+#[cfg(not(feature = "elf-tls"))]
 macro_rules! __scoped_thread_local_inner {
     ($t:ty) => {{
         static _KEY: $crate::thread::__ScopedKeyInner<$t> =
@@ -98,7 +98,7 @@ macro_rules! __scoped_thread_local_inner {
            reason = "should not be necessary")]
 #[macro_export]
 #[allow_internal_unstable]
-#[cfg(not(no_elf_tls))]
+#[cfg(feature = "elf-tls")]
 macro_rules! __scoped_thread_local_inner {
     ($t:ty) => {{
         #[cfg_attr(not(any(windows,
@@ -222,7 +222,7 @@ impl<T> ScopedKey<T> {
               target_os = "netbsd",
               target_os = "openbsd",
               target_arch = "aarch64",
-              no_elf_tls)))]
+              not(feature = "elf-tls"))))]
 #[doc(hidden)]
 mod imp {
     use cell::Cell;
@@ -246,7 +246,7 @@ mod imp {
           target_os = "netbsd",
           target_os = "openbsd",
           target_arch = "aarch64",
-          no_elf_tls))]
+          not(feature = "elf-tls")))]
 #[doc(hidden)]
 mod imp {
     use cell::Cell;

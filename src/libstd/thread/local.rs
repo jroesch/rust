@@ -102,7 +102,7 @@ pub struct LocalKey<T:'static> {
 #[macro_export]
 #[stable(feature = "rust1", since = "1.0.0")]
 #[allow_internal_unstable]
-#[cfg(not(no_elf_tls))]
+#[cfg(feature = "elf-tls")]
 macro_rules! thread_local {
     (static $name:ident: $t:ty = $init:expr) => (
         static $name: $crate::thread::LocalKey<$t> =
@@ -123,7 +123,7 @@ macro_rules! thread_local {
 #[macro_export]
 #[stable(feature = "rust1", since = "1.0.0")]
 #[allow_internal_unstable]
-#[cfg(no_elf_tls)]
+#[cfg(not(feature = "elf-tls"))]
 macro_rules! thread_local {
     (static $name:ident: $t:ty = $init:expr) => (
         static $name: $crate::thread::LocalKey<$t> =
@@ -270,7 +270,7 @@ impl<T: 'static> LocalKey<T> {
 
 #[cfg(all(any(target_os = "macos", target_os = "linux"),
           not(target_arch = "aarch64"),
-          not(no_elf_tls)))]
+          feature = "elf-tls"))]
 #[doc(hidden)]
 mod imp {
     use cell::{Cell, UnsafeCell};
@@ -418,7 +418,7 @@ mod imp {
 
 #[cfg(any(not(any(target_os = "macos", target_os = "linux")),
           target_arch = "aarch64",
-          no_elf_tls))]
+          not(feature = "elf-tls")))]
 #[doc(hidden)]
 mod imp {
     use prelude::v1::*;

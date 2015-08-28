@@ -19,6 +19,7 @@
 #![feature(no_std)]
 #![no_std]
 #![unstable(feature = "rustc_private", issue = "27812")]
+#![cfg_attr(not(stage0), deny(warnings))]
 
 //! A typesafe bitmask flag generator.
 
@@ -61,7 +62,8 @@
 /// The generated `struct`s can also be extended with type and trait implementations:
 ///
 /// ```{.rust}
-/// #![feature(rustc_private)]
+/// # #![feature(associated_consts)]
+/// # #![feature(rustc_private)]
 /// #[macro_use] extern crate rustc_bitflags;
 ///
 /// use std::fmt;

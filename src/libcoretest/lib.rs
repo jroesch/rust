@@ -8,6 +8,8 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
+#![cfg_attr(not(stage0), deny(warnings))
+
 #![feature(as_unsafe_cell)]
 #![feature(borrow_state)]
 #![feature(box_syntax)]
@@ -24,6 +26,9 @@
 #![feature(iter_arith)]
 #![feature(iter_arith)]
 #![feature(iter_cmp)]
+#![feature(iter_idx)]
+#![feature(iter_iterate)]
+#![feature(iter_min_max)]
 #![feature(iter_order)]
 #![feature(libc)]
 #![feature(nonzero)]
@@ -40,6 +45,8 @@
 #![feature(unboxed_closures)]
 #![feature(unicode)]
 #![feature(unique)]
+
+#![allow(dead_code, unused_imports, deprecated, unused_features)]
 
 extern crate core;
 extern crate test;

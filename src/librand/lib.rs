@@ -24,6 +24,7 @@
        html_favicon_url = "https://doc.rust-lang.org/favicon.ico",
        html_root_url = "https://doc.rust-lang.org/nightly/",
        html_playground_url = "https://play.rust-lang.org/")]
+#![cfg_attr(not(stage0), deny(warnings))]
 #![no_std]
 #![staged_api]
 #![unstable(feature = "rand",
@@ -38,6 +39,7 @@
 #![feature(step_by)]
 
 #![cfg_attr(test, feature(test, rand, rustc_private, iter_order))]
+#![cfg_attr(test, allow(unused_imports, unused_features))]
 
 #![allow(deprecated)]
 

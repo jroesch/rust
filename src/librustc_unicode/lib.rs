@@ -32,6 +32,7 @@
        html_playground_url = "https://play.rust-lang.org/",
        issue_tracker_base_url = "https://github.com/rust-lang/rust/issues/",
        test(no_crate_inject))]
+#![cfg_attr(not(stage0), deny(warnings))]
 #![no_std]
 
 #![feature(char_from_unchecked)]
