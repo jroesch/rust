@@ -95,3 +95,4 @@ version.ml
 version.texi
 Cargo.lock
 /target/
+config.toml

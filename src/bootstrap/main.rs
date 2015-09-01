@@ -50,7 +50,9 @@ extern crate bootstrap;
 extern crate build_helper;
 extern crate cmake;
 extern crate filetime;
+extern crate getopts;
 extern crate num_cpus;
+extern crate rustc_serialize;
 extern crate toml;
 
 use std::collections::HashMap;
@@ -63,6 +65,7 @@ use std::process::Command;
 use build_helper::{run, run_silent, ar, cflags, cc, cxx};
 use bootstrap::{dylib_path_var, dylib_path};
 use filetime::FileTime;
+use getopts::Options;
 
 macro_rules! t {
     ($e:expr) => (match $e {
@@ -85,7 +88,7 @@ struct Build {
     skip_stage2: bool,
 }
 
-struct Config {
+pub struct Config {
     ccache: bool,
     verbose: bool,
     submodules: bool,
@@ -108,11 +111,19 @@ struct Config {
 mod config;
 
 fn main() {
+    let mut opts = Options::new();
+    opts.optflag("v", "verbose", "use verbose output");
+    opts.optflag("", "skip-stage0", "skip the stage0 compiler step");
+    opts.optflag("", "skip-stage1", "skip the stage1 compiler step");
+    opts.optflag("", "skip-stage2", "skip the stage2 compiler step");
+    opts.optopt("", "config", "TOML configuration file for build", "FILE");
+    opts.optflag("h", "help", "print this help message");
+    let m = opts.parse(&env::args().skip(1).collect::<Vec<_>>())
+                .unwrap_or_else(|e| panic!("failed to parse options: {}", e));
+
     let build = env_s("BUILD");
     let host = vec![build.clone()];
-    //host.push("i686-unknown-linux-gnu".to_string());
     let target = host.clone();
-    //target.push("arm-unknown-linux-gnueabihf".to_string());
 
     let mut build = Build {
         cargo: PathBuf::from(env("CARGO")),
@@ -139,11 +150,22 @@ fn main() {
             rust_debuginfo: false,
         },
     };
-    build.config.verbose = env::args().any(|s| s == "-v");
-    build.skip_stage2 = env::args().any(|s| s == "--skip-stage2");
-    build.skip_stage1 = build.skip_stage2 || env::args().any(|s| s == "--skip-stage1");
-    build.skip_stage0 = build.skip_stage1 || env::args().any(|s| s == "--skip-stage0");
-    build.config.ccache = env::args().any(|s| s == "--ccache");
+    let cfg_file = m.opt_str("config").or_else(|| {
+        if fs::metadata("config.toml").is_ok() {
+            Some("config.toml".to_string())
+        } else {
+            None
+        }
+    });
+    if let Some(cfg) = cfg_file {
+        config::configure(&mut build.config, &cfg);
+    }
+    if m.opt_present("v") {
+        build.config.verbose = false;
+    }
+    build.skip_stage2 = m.opt_present("skip-stage2");
+    build.skip_stage1 = build.skip_stage2 || m.opt_present("skip-stage1");
+    build.skip_stage0 = build.skip_stage1 || m.opt_present("skip-stage0");
     build.build();
 }
 
@@ -612,18 +634,6 @@ impl Build {
     fn libdir(&self, target: &str) -> &'static str {
         if target.contains("windows") {"bin"} else {"lib"}
     }
-
-    // /// Given a dynamic library called `name`, return the filename for the
-    // /// library for a particular target.
-    // fn dylib(&self, name: &str, target: &str) -> String {
-    //     if target.contains("windows") {
-    //         format!("{}.dll", name)
-    //     } else if target.contains("apple") {
-    //         format!("lib{}.dylib", name)
-    //     } else {
-    //         format!("lib{}.so", name)
-    //     }
-    // }
 
     /// Given an executable called `name`, return the filename for the
     /// executable for a particular target.

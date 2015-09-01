@@ -1,0 +1,42 @@
+# Sample TOML configuration file for building Rust.
+#
+# All options are commented out by default in this file, and they're commented
+# out with their default values. The build system by default looks for
+# `config.toml` in the current directory of a build for build configuration, but
+# a custom configuration file can also be specified with `--config` to the build
+# system.
+
+# Various options for tweaking how we compile LLVM
+[llvm]
+
+# Indicates whether the LLVM build is a Release or Debug build
+#optimize = true
+
+# Indicates whether the LLVM assertions are enabled or not
+#assertions = false
+
+# Indicates whether ccache is used when building LLVM
+#ccache = false
+
+[rust]
+
+# Whether or not to optimize the compiler and standard library
+#optimize = true
+
+# Whether or not debug assertions are enabled for the compiler and standard
+# library
+#debug-assertions = false
+
+# Whether or not debuginfo is emitted
+#debuginfo = false
+
+# Whether or not jemalloc is built and enabled
+#use-jemalloc = true
+
+# Whether or not jemalloc is built with its debug option set
+#debug-jemalloc = false
+
+# Whether or not ELF-based TLS is enabled for targets that support it. This is
+# primarily available for OSX 10.6 support where ELF-based TLS is not available,
+# so the standard library needs to disable it.
+#elf-tls = true

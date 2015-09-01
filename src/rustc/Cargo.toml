@@ -15,24 +15,33 @@ path = "lib.rs"
 opt-level = 2
 codegen-units = 4
 
+# These options are controlled from our rustc wrapper script, so turn them off
+# here and have them controlled elsewhere.
 [profile.dev]
 debug = false
 debug-assertions = false
 
+# All optional dependencies so the features passed to this Cargo.toml select
+# what should actually be built.
 [dependencies]
 rustc_driver = { path = "../librustc_driver", optional = true }
 rustc_back = { path = "../librustc_back", optional = true }
 std = { path = "../libstd", optional = true }
 
 [features]
-rustc = ["rustc_driver", "rustc_back"]
-rustc-with-jemalloc = ["rustc_back/jemalloc"]
-rustc-stage0 = []
-rustc-not-stage0 = []
 
+# Features available to configure how the standard library is built, see
+# the std_features function in the bootstrap script.
 build-std = ["std"]
 std-stage0 = ["std/stage0"]
 std-not-stage0 = ["std/not-stage0"]
 elf-tls = ["std/elf-tls"]
 std-with-jemalloc = ["std/jemalloc"]
 debug-jemalloc = ["std/debug-jemalloc"]
+
+# Features available to configure how the compiler is built, see the
+# `rustc_features` function in the bootstrap script.
+rustc = ["rustc_driver", "rustc_back"]
+rustc-with-jemalloc = ["rustc_back/jemalloc"]
+rustc-stage0 = []
+rustc-not-stage0 = []
