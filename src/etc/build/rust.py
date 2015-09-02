@@ -88,7 +88,6 @@ class RustBuild:
         env["DYLD_LIBRARY_PATH"] = os.path.join(self.rustc_root(), "rustc/lib")
         env["PATH"] = os.path.join(self.rustc_root(), "rustc/bin") + \
                       os.pathsep + env["PATH"]
-
         self.run([self.cargo(), "build", "--manifest-path",
                   os.path.join(self.rust_root, "src/bootstrap/Cargo.toml")],
                  env)
@@ -98,85 +97,81 @@ class RustBuild:
         if ret != 0:
             exit(ret)
 
-def build_triple(config):
-    try:
-        toml = open(config or 'config.toml').read()
-        for line in iter(toml.splitlines()):
+    def build_triple(self):
+        for line in iter(self.config_toml.splitlines()):
             if line.startswith('build ='):
                 return line[9:-1]
-    except:
-        pass
-    try:
-        ostype = subprocess.check_output(['uname', '-s']).strip()
-        cputype = subprocess.check_output(['uname', '-m']).strip()
-    except FileNotFoundError:
-        if sys.platform == 'win32':
-            return 'x86_64-pc-windows-msvc'
+        try:
+            ostype = subprocess.check_output(['uname', '-s']).strip()
+            cputype = subprocess.check_output(['uname', '-m']).strip()
+        except FileNotFoundError:
+            if sys.platform == 'win32':
+                return 'x86_64-pc-windows-msvc'
+            else:
+                raise
+
+        # Darwin's `uname -s` lies and always returns i386. We have to use
+        # sysctl instead.
+        if ostype == 'Darwin' and cputype == 'i686':
+            sysctl = subprocess.check_output(['sysctl', 'hw.optional.x86_64'])
+            if sysctl.contains(': 1'):
+                cputype = 'x86_64'
+
+        # The goal here is to come up with the same triple as LLVM would,
+        # at least for the subset of platforms we're willing to target.
+        if ostype == 'Linux':
+            ostype = 'unknown-linux-gnu'
+        elif ostype == 'FreeBSD':
+            ostype = 'unknown-freebsd'
+        elif ostype == 'DragonFly':
+            ostype = 'unknown-dragonfly'
+        elif ostype == 'Bitrig':
+            ostype = 'unknown-bitrig'
+        elif ostype == 'OpenBSD':
+            ostype = 'unknown-openbsd'
+        elif ostype == 'NetBSD':
+            ostype = 'unknown-netbsd'
+        elif ostype == 'Darwin':
+            ostype = 'apple-darwin'
+        elif ostype.startswith('MINGW'):
+            # msys' `uname` does not print gcc configuration, but prints msys
+            # configuration. so we cannot believe `uname -m`:
+            # msys1 is always i686 and msys2 is always x86_64.
+            # instead, msys defines $MSYSTEM which is MINGW32 on i686 and
+            # MINGW64 on x86_64.
+            ostype = 'pc-windows-gnu'
+            cputype = 'i686'
+            if os.environ.get('MSYSTEM') == 'MINGW64':
+                cputype = 'x86_64'
+        elif ostype.startswith('MSYS'):
+            ostype = 'pc-windows-gnu'
+        elif ostype.startswith('CYGWIN_NT'):
+            cputype = 'i686'
+            if ostype.endswith('WOW64'):
+                cputype = 'x86_64'
+            ostype = 'pc-windows-gnu'
         else:
-            raise
+            raise Exception("unknown OS type: " + ostype)
 
-    # Darwin's `uname -s` lies and always returns i386. We have to use sysctl
-    # instead.
-    if ostype == 'Darwin' and cputype == 'i686':
-        sysctl = subprocess.check_output(['sysctl', 'hw.optional.x86_64'])
-        if sysctl.contains(': 1'):
+        if (cputype == 'i386' or cputype == 'i486' or cputype == 'i686' or
+                cputype == 'i786' or cputype == 'x86'):
+            cputype = 'i686'
+        elif cputype == 'xscale' or cputype == 'arm':
+            cputype = 'arm'
+        elif cputype == 'armv7l':
+            cputype = 'arm'
+            ostype += 'eabihf'
+        elif cputype == 'aarch64':
+            cputype = 'aarch64'
+        elif cputype == 'powerpc' or cputype == 'ppc' or cputype == 'ppc64':
+            cputype = 'powerpc'
+        elif (cputype == 'amd64' or cputype == 'x86_64' or cputype == 'x86-64' or
+                cputype =='x64'):
             cputype = 'x86_64'
+        else:
+            raise Exception("unknown cpu type: " + cputype)
 
-    # The goal here is to come up with the same triple as LLVM would,
-    # at least for the subset of platforms we're willing to target.
-    if ostype == 'Linux':
-        ostype = 'unknown-linux-gnu'
-    elif ostype == 'FreeBSD':
-        ostype = 'unknown-freebsd'
-    elif ostype == 'DragonFly':
-        ostype = 'unknown-dragonfly'
-    elif ostype == 'Bitrig':
-        ostype = 'unknown-bitrig'
-    elif ostype == 'OpenBSD':
-        ostype = 'unknown-openbsd'
-    elif ostype == 'NetBSD':
-        ostype = 'unknown-netbsd'
-    elif ostype == 'Darwin':
-        ostype = 'apple-darwin'
-    elif ostype.startswith('MINGW'):
-        # msys' `uname` does not print gcc configuration, but prints msys
-        # configuration. so we cannot believe `uname -m`:
-        # msys1 is always i686 and msys2 is always x86_64.
-        # instead, msys defines $MSYSTEM which is MINGW32 on i686 and
-        # MINGW64 on x86_64.
-        ostype = 'pc-windows-gnu'
-        cputype = 'i686'
-        if os.environ.get('MSYSTEM') == 'MINGW64':
-            cputype = 'x86_64'
-    elif ostype.startswith('MSYS'):
-        ostype = 'pc-windows-gnu'
-    elif ostype.startswith('CYGWIN_NT'):
-        cputype = 'i686'
-        if ostype.endswith('WOW64'):
-            cputype = 'x86_64'
-        ostype = 'pc-windows-gnu'
-    else:
-        raise Exception("unknown OS type: " + ostype)
-
-    if (cputype == 'i386' or cputype == 'i486' or cputype == 'i686' or
-            cputype == 'i786' or cputype == 'x86'):
-        cputype = 'i686'
-    elif cputype == 'xscale' or cputype == 'arm':
-        cputype = 'arm'
-    elif cputype == 'armv7l':
-        cputype = 'arm'
-        ostype += 'eabihf'
-    elif cputype == 'aarch64':
-        cputype = 'aarch64'
-    elif cputype == 'powerpc' or cputype == 'ppc' or cputype == 'ppc64':
-        cputype = 'powerpc'
-    elif (cputype == 'amd64' or cputype == 'x86_64' or cputype == 'x86-64' or
-            cputype =='x64'):
-        cputype = 'x86_64'
-    else:
-        raise Exception("unknown cpu type: " + cputype)
-
-    return cputype + '-' + ostype
+        return cputype + '-' + ostype
 
 parser = argparse.ArgumentParser(description='Build rust')
 parser.add_argument('--config', help='config file')
@@ -186,12 +181,18 @@ args, _ = parser.parse_known_args(args)
 
 # Configure initial bootstrap
 rb = RustBuild()
+rb.config_toml = ''
 rb.rust_root = os.path.dirname(os.path.abspath(__file__))
 rb.rust_root = os.path.dirname(os.path.dirname(os.path.dirname(rb.rust_root)))
 rb.build_dir = os.path.join(os.getcwd(), "target")
-rb.build = build_triple(args.config);
+
+try:
+    rb.config_toml = open(args.config or 'config.toml').read()
+except:
+    pass
 
 # Fetch/build the bootstrap
+rb.build = rb.build_triple()
 rb.download_rust_nightly()
 sys.stdout.flush()
 rb.build_bootstrap()
