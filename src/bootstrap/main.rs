@@ -122,6 +122,12 @@ fn main() {
     let m = opts.parse(&env::args().skip(1).collect::<Vec<_>>())
                 .unwrap_or_else(|e| panic!("failed to parse options: {}", e));
 
+    if m.opt_present("h") {
+        let brief = format!("Usage: rust.py [options]");
+        print!("{}", opts.usage(&brief));
+        return
+    }
+
     let mut build = Build {
         cargo: PathBuf::from(env("CARGO")),
         rustc: PathBuf::from(env("RUSTC")),
@@ -356,8 +362,10 @@ impl Build {
             t!(fs::hard_link(self.compiler_rt_out(target)
                                  .join("triple/builtins/libcompiler_rt.a"),
                              libdir.join("libcompiler-rt.a")));
-            self.run(self.cargo(stage, true, compiler, target)
-                         .arg("--features").arg(self.std_features(stage, target))
+            let stage_arg = self.stage_arg(stage, compiler);
+            let features = self.std_features(stage_arg, target);
+            self.run(self.cargo(stage, compiler, &out_dir, sysroot_host, target)
+                         .arg("--features").arg(features)
                          .arg("--lib")
                          .arg("--manifest-path")
                          .arg(self.src.join("src/rustc/Cargo.toml")));
@@ -384,9 +392,11 @@ impl Build {
         self.clear_if_dirty(&out_dir, &shim, &rustc, || {
             println!("Building stage{} compiler artifacts ({} -> {})", stage,
                      host, target);
-            let mut cargo = self.cargo(stage, false, compiler, target);
+            let features = self.rustc_features(self.stage_arg(stage, compiler));
+            let mut cargo = self.cargo(stage, compiler, &out_dir,
+                                       sysroot_host, target);
             cargo.env("CFG_COMPILER_HOST_TRIPLE", target)
-                 .arg("--features").arg(self.rustc_features(stage))
+                 .arg("--features").arg(features)
                  .arg("--bin").arg("rustc")
                  .arg("--manifest-path")
                  .arg(self.src.join("src/rustc/Cargo.toml"));
@@ -451,31 +461,25 @@ impl Build {
     /// This will create a `Command` that represents a pending execution of
     /// Cargo for the specified stage, whether or not the standard library is
     /// being built, and using the specified compiler targeting `target`.
-    fn cargo(&self, stage: u32, is_std: bool, compiler: &Compiler,
-             target: &str) -> Command {
-        let stage_arg = match *compiler {
-            Compiler::NightlySnapshot => stage,
-            _ if stage == 0 => 1,
-            _ => stage,
-        };
+    fn cargo(&self, stage: u32, compiler: &Compiler, out_dir: &Path,
+             sysroot_host: &str, target: &str) -> Command {
         let mut cargo = Command::new(&self.cargo);
-        let host = self.compiler_host(compiler);
         cargo.arg("build")
              .arg("--target").arg(target)
-             .env("CARGO_TARGET_DIR", self.stage_out(stage, &host, is_std));
+             .env("CARGO_TARGET_DIR", out_dir);
 
         // Customize the compiler we're running. Specify the compiler to cargo
         // as our shim and then pass it some various options used to configure
         // how the actual compiler itself is called.
         cargo.env("RUSTC", self.out.join("bootstrap/debug/rustc"))
              .env("RUSTC_REAL", self.compiler(compiler))
-             .env("RUSTC_STAGE", stage_arg.to_string())
+             .env("RUSTC_STAGE", self.stage_arg(stage, compiler).to_string())
              .env("RUSTC_DEBUGINFO", self.config.rust_debuginfo.to_string())
              .env("RUSTC_DEBUG_ASSERTIONS",
                   self.config.rust_debug_assertions.to_string())
              .env("RUSTC_SNAPSHOT", &self.rustc)
-             .env("RUSTC_SYSROOT", self.sysroot(stage, &host))
-             .env("RUSTC_SNAPSHOT_LIBDIR", self.rustc_lib_path(0, &host));
+             .env("RUSTC_SYSROOT", self.sysroot(stage, &sysroot_host))
+             .env("RUSTC_SNAPSHOT_LIBDIR", self.rustc_snapshot_libdir());
 
         // Specify some variuos options for build scripts used throughout the
         // build.
@@ -488,7 +492,7 @@ impl Build {
         if self.config.rust_optimize {
             cargo.arg("--release");
         }
-        self.set_rustc_lib_path(stage, &host, &mut cargo);
+        self.set_rustc_lib_path(compiler, &mut cargo);
         return cargo
     }
 
@@ -506,6 +510,14 @@ impl Build {
                 self.sysroot(stage, host).join("bin")
                     .join(self.exe("rustc", host))
             }
+        }
+    }
+
+    fn stage_arg(&self, stage: u32, compiler: &Compiler) -> u32 {
+        match *compiler {
+            Compiler::NightlySnapshot => stage,
+            _ if stage == 0 => 1,
+            _ => stage,
         }
     }
 
@@ -563,7 +575,7 @@ impl Build {
         if self.config.debug_jemalloc {
             stage_arg.push_str(" debug-jemalloc");
         }
-        if self.config.use_jemalloc && stage > 0 && !target.contains("msvc") {
+        if self.config.use_jemalloc && !target.contains("msvc") {
             stage_arg.push_str(" std-with-jemalloc");
         }
         return stage_arg
@@ -623,20 +635,23 @@ impl Build {
         self.out.join(target).join("compiler-rt")
     }
 
-    fn set_rustc_lib_path(&self, stage: u32, host: &str, cmd: &mut Command) {
+    fn set_rustc_lib_path(&self, compiler: &Compiler, cmd: &mut Command) {
+        // Windows doesn't need dylib path munging because the dlls for the
+        // compiler live next to the compiler and the system will find them
+        // automatically.
+        if cfg!(windows) { return }
+
         let mut path = dylib_path();
-        if !cfg!(windows) {
-            path.insert(0, self.rustc_lib_path(stage, host));
-        }
+        path.insert(0, match *compiler {
+            Compiler::NightlySnapshot => self.rustc_snapshot_libdir(),
+            Compiler::Built(stage, host) => self.sysroot(stage, host).join("lib"),
+        });
         cmd.env(dylib_path_var(), t!(env::join_paths(path)));
     }
 
-    fn rustc_lib_path(&self, stage: u32, host: &str) -> PathBuf {
-        if stage == 0 {
-            self.rustc.parent().unwrap().parent().unwrap().join(self.libdir(host))
-        } else {
-            self.sysroot(stage - 1, host).join(self.libdir(host))
-        }
+    fn rustc_snapshot_libdir(&self) -> PathBuf {
+        self.rustc.parent().unwrap().parent().unwrap()
+            .join(self.libdir(&self.config.build))
     }
 
     fn libdir(&self, target: &str) -> &'static str {
