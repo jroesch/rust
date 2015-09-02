@@ -72,10 +72,11 @@ pub fn configure(config: &mut Config, file: &str) {
     };
 
     set(&mut config.build, toml.build.build.clone());
-    for host in toml.build.host.iter().chain(Some(&config.build)) {
+    config.host.push(config.build.clone());
+    for host in toml.build.host.iter() {
         config.host.push(host.clone());
     }
-    for target in toml.build.target.iter().chain(config.host.iter()) {
+    for target in config.host.iter().chain(&toml.build.target) {
         config.target.push(target.clone());
     }
     if let Some(ref llvm) = toml.llvm {
