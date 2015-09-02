@@ -252,7 +252,7 @@ impl Build {
         let dst = self.llvm_out(target);
         let stamp = self.src.join("src/rustllvm/llvm-auto-clean-trigger");
         let llvm_config = dst.join("bin").join(self.exe("llvm-config", target));
-        self.clear_if_dirty(&dst, &stamp, &llvm_config, || {});
+        self.clear_if_dirty(&dst, &stamp, &llvm_config);
         if fs::metadata(llvm_config).is_ok() {
             return
         }
@@ -349,31 +349,27 @@ impl Build {
     fn build_std(&self, stage: u32, sysroot_host: &str, target: &str,
                  compiler: &Compiler) {
         let host = self.compiler_host(compiler);
-        let out_dir = self.stage_out(stage, &host, true);
-        let shim = self.libstd_shim(stage, &host, target);
-        let rustc = self.compiler(compiler);
-        let libdir = self.sysroot_libdir(stage, sysroot_host, target);
+        println!("Building stage{} std artifacts ({} -> {})", stage,
+                 host, target);
 
         // Move compiler-rt into place as it'll be required by the compiler when
         // building the standard library to link libstd.dll
+        let libdir = self.sysroot_libdir(stage, sysroot_host, target);
         let _ = fs::remove_dir_all(&libdir);
         t!(fs::create_dir_all(&libdir));
         t!(fs::hard_link(self.compiler_rt_out(target)
                              .join("triple/builtins/libcompiler_rt.a"),
                          libdir.join("libcompiler-rt.a")));
 
-        self.clear_if_dirty(&out_dir, &rustc, &shim, || {
-            println!("Building stage{} std artifacts ({} -> {})", stage,
-                     host, target);
-            let stage_arg = self.stage_arg(stage, compiler);
-            let features = self.std_features(stage_arg, target);
-            self.run(self.cargo(stage, compiler, &out_dir, sysroot_host, target)
-                         .arg("--features").arg(features)
-                         .arg("--lib")
-                         .arg("--manifest-path")
-                         .arg(self.src.join("src/rustc/Cargo.toml")));
-        });
-        self.add_to_sysroot(target, &out_dir, &libdir);
+        let out_dir = self.cargo_out(stage, &host, true, target);
+        self.clear_if_dirty(&out_dir, &self.compiler(compiler),
+                            &self.libstd_shim(stage, &host, target));
+        self.run(self.cargo(stage, compiler, true, sysroot_host, target)
+                     .arg("--features").arg(self.std_features())
+                     .arg("--lib")
+                     .arg("--manifest-path")
+                     .arg(self.src.join("src/rustc/Cargo.toml")));
+        self.add_to_sysroot(&out_dir, &libdir);
     }
 
     /// Build the compiler.
@@ -386,44 +382,43 @@ impl Build {
     fn build_rustc(&self, stage: u32, sysroot_host: &str, target: &str,
                    compiler: &Compiler) {
         let host = self.compiler_host(compiler);
-        let out_dir = self.stage_out(stage, &host, false);
-        let rustc = self.cargo_out(stage, &host, false, target)
-                        .join(self.exe("rustc", target));
-        let shim = self.libstd_shim(stage, &host, target);
+        println!("Building stage{} compiler artifacts ({} -> {})", stage,
+                 host, target);
 
-        self.clear_if_dirty(&out_dir, &shim, &rustc, || {
-            println!("Building stage{} compiler artifacts ({} -> {})", stage,
-                     host, target);
-            let features = self.rustc_features(self.stage_arg(stage, compiler));
-            let mut cargo = self.cargo(stage, compiler, &out_dir,
-                                       sysroot_host, target);
-            cargo.env("CFG_COMPILER_HOST_TRIPLE", target)
-                 .arg("--features").arg(features)
-                 .arg("--bin").arg("rustc")
-                 .arg("--manifest-path")
-                 .arg(self.src.join("src/rustc/Cargo.toml"));
+        let out_dir = self.cargo_out(stage, &host, false, target);
+        let rustc = out_dir.join(self.exe("rustc", target));
+        self.clear_if_dirty(&out_dir, &self.libstd_shim(stage, &host, target),
+                            &rustc);
 
-            // Set some configuration variables picked up by build scripts and
-            // the compiler alike
-            if target == self.config.build {
-                if let Some(ref s) = self.config.llvm_root {
-                    let cfg = self.exe("llvm-config", target);
-                    cargo.env("LLVM_CONFIG", s.join("bin").join(cfg));
-                }
-            }
-            if let Some(ref s) = self.config.rustc_default_linker {
-                cargo.env("CFG_DEFAULT_LINKER", s);
-            }
-            if let Some(ref s) = self.config.rustc_default_ar {
-                cargo.env("CFG_DEFAULT_AR", s);
-            }
+        let mut cargo = self.cargo(stage, compiler, false, sysroot_host,
+                                   target);
+        cargo.env("CFG_COMPILER_HOST_TRIPLE", target)
+             .arg("--features").arg(self.rustc_features())
+             .arg("--bin").arg("rustc")
+             .arg("--manifest-path")
+             .arg(self.src.join("src/rustc/Cargo.toml"));
 
-            // And run!
-            self.run(&mut cargo);
-        });
+        // Set some configuration variables picked up by build scripts and
+        // the compiler alike
+        if target == self.config.build {
+            if let Some(ref s) = self.config.llvm_root {
+                let cfg = self.exe("llvm-config", target);
+                cargo.env("LLVM_CONFIG", s.join("bin").join(cfg));
+            }
+        }
+        if let Some(ref s) = self.config.rustc_default_linker {
+            cargo.env("CFG_DEFAULT_LINKER", s);
+        }
+        if let Some(ref s) = self.config.rustc_default_ar {
+            cargo.env("CFG_DEFAULT_AR", s);
+        }
+
+        // And run!
+        self.run(&mut cargo);
+
         t!(fs::create_dir_all(self.sysroot(stage, sysroot_host).join("bin")));
         let sysroot_libdir = self.sysroot_libdir(stage, sysroot_host, target);
-        self.add_to_sysroot(target, &out_dir, &sysroot_libdir);
+        self.add_to_sysroot(&out_dir, &sysroot_libdir);
 
         if sysroot_host == target {
             self.assemble_compiler(stage, target, &host, &rustc);
@@ -466,13 +461,11 @@ impl Build {
 
     /// Clear out `dir` if our build has been flagged as dirty, and also set
     /// ourselves as dirty if `file` changes when `f` is executed.
-    fn clear_if_dirty<F: FnOnce()>(&self, dir: &Path,
-                                   input: &Path, output: &Path, f: F) {
+    fn clear_if_dirty(&self, dir: &Path, input: &Path, output: &Path) {
         if mtime(output) < mtime(input) && fs::metadata(output).is_ok() {
             self.verbose(&format!("Dirty - {}", output.display()));
             let _ = fs::remove_dir_all(dir);
         }
-        f();
     }
 
     /// Prepares an invocation of `cargo` to be run.
@@ -480,9 +473,11 @@ impl Build {
     /// This will create a `Command` that represents a pending execution of
     /// Cargo for the specified stage, whether or not the standard library is
     /// being built, and using the specified compiler targeting `target`.
-    fn cargo(&self, stage: u32, compiler: &Compiler, out_dir: &Path,
+    fn cargo(&self, stage: u32, compiler: &Compiler, is_std: bool,
              sysroot_host: &str, target: &str) -> Command {
         let mut cargo = Command::new(&self.cargo);
+        let out_dir = self.stage_out(stage, &self.compiler_host(compiler),
+                                     is_std);
         cargo.arg("build")
              .arg("--target").arg(target)
              .env("CARGO_TARGET_DIR", out_dir);
@@ -548,9 +543,7 @@ impl Build {
     /// For a particular stage this will link all of the contents of `out_dir`
     /// into the sysroot of the `host` compiler, assuming the artifacts are
     /// compiled for the specified `target`.
-    fn add_to_sysroot(&self, target: &str, out_dir: &Path, sysroot_dst: &Path) {
-        let out_dir = out_dir.join(target).join(self.cargo_dir());
-
+    fn add_to_sysroot(&self, out_dir: &Path, sysroot_dst: &Path) {
         // Collect the set of all files in the dependencies directory, keyed
         // off the name of the library. We assume everything is of the form
         // `foo-<hash>.{rlib,so,...}`, and there could be multiple different
