@@ -48,6 +48,9 @@ fn main() {
         Err(..) => "n",
     };
     cmd.arg("-C").arg(format!("debug-assertions={}", debug_assertions));
+    if let Ok(s) = env::var("RUSTC_CODEGEN_UNITS") {
+        cmd.arg("-C").arg(format!("codegen-units={}", s));
+    }
     std::process::exit(match cmd.status() {
         Ok(s) => s.code().unwrap_or(1),
         Err(e) => panic!("\n\nfailed to run {:?}: {}\n\n", cmd, e),

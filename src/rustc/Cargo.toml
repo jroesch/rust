@@ -13,7 +13,6 @@ path = "lib.rs"
 
 [profile.release]
 opt-level = 2
-codegen-units = 4
 
 # These options are controlled from our rustc wrapper script, so turn them off
 # here and have them controlled elsewhere.

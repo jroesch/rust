@@ -95,6 +95,7 @@ pub struct Config {
 
     // rust codegen options
     rust_optimize: bool,
+    rust_codegen_units: u32,
     rust_debug_assertions: bool,
     rust_debuginfo: bool,
     rustc_default_linker: Option<String>,
@@ -144,6 +145,7 @@ fn main() {
     build.config.elf_tls = true;
     build.config.use_jemalloc = true;
     build.config.rust_optimize = true;
+    build.config.rust_codegen_units = 1;
     build.config.build = env_s("BUILD");
 
     let cfg_file = m.opt_str("config").or_else(|| {
@@ -492,6 +494,8 @@ impl Build {
              .env("RUSTC_REAL", self.compiler(compiler))
              .env("RUSTC_STAGE", self.stage_arg(stage, compiler).to_string())
              .env("RUSTC_DEBUGINFO", self.config.rust_debuginfo.to_string())
+             .env("RUSTC_CODEGEN_UNITS",
+                  self.config.rust_codegen_units.to_string())
              .env("RUSTC_DEBUG_ASSERTIONS",
                   self.config.rust_debug_assertions.to_string())
              .env("RUSTC_SNAPSHOT", &self.rustc)

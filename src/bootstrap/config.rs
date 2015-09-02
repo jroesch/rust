@@ -3,6 +3,7 @@ use std::fs::File;
 use std::io::prelude::*;
 use std::process;
 
+use num_cpus;
 use rustc_serialize::Decodable;
 use toml::{Parser, Decoder, Value};
 
@@ -34,6 +35,7 @@ struct Llvm {
 struct Rust {
     elf_tls: Option<bool>,
     optimize: Option<bool>,
+    codegen_units: Option<u32>,
     debug_assertions: Option<bool>,
     debuginfo: Option<bool>,
     debug_jemalloc: Option<bool>,
@@ -95,6 +97,12 @@ pub fn configure(config: &mut Config, file: &str) {
         set(&mut config.use_jemalloc, rust.use_jemalloc);
         config.rustc_default_linker = rust.default_linker.clone();
         config.rustc_default_ar = rust.default_ar.clone();
+
+        match rust.codegen_units {
+            Some(0) => config.rust_codegen_units = num_cpus::get() as u32,
+            Some(n) => config.rust_codegen_units = n,
+            None => {}
+        }
     }
 }
 

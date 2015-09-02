@@ -54,6 +54,11 @@
 # Whether or not to optimize the compiler and standard library
 #optimize = true
 
+# Number of codegen units to use for each compiler invocation. A value of 0
+# means "the number of cores on this machine", and 1+ is passed through to the
+# compiler.
+#codegen-units = 1
+
 # Whether or not debug assertions are enabled for the compiler and standard
 # library
 #debug-assertions = false
