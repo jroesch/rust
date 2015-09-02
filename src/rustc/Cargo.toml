@@ -32,8 +32,6 @@ std = { path = "../libstd", optional = true }
 # Features available to configure how the standard library is built, see
 # the std_features function in the bootstrap script.
 build-std = ["std"]
-std-stage0 = ["std/stage0"]
-std-not-stage0 = ["std/not-stage0"]
 elf-tls = ["std/elf-tls"]
 std-with-jemalloc = ["std/jemalloc"]
 debug-jemalloc = ["std/debug-jemalloc"]
@@ -42,5 +40,3 @@ debug-jemalloc = ["std/debug-jemalloc"]
 # `rustc_features` function in the bootstrap script.
 rustc = ["rustc_driver", "rustc_back"]
 rustc-with-jemalloc = ["rustc_back/jemalloc"]
-rustc-stage0 = []
-rustc-not-stage0 = []

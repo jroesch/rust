@@ -10,12 +10,11 @@ path = "lib.rs"
 [dependencies]
 core = { path = "../libcore" }
 libc = { path = "../liblibc" }
-alloc_system = { path = "../liballoc_system", optional = true }
+
+# FIXME(stage0): remove this after a snapshot
+alloc_system = { path = "../liballoc_system" }
 
 [dev-dependencies]
 std = { path = "../libstd" }
 log = { path = "../liblog" }
 test = { path = "../libtest" }
-
-[features]
-stage0 = ["alloc_system"]

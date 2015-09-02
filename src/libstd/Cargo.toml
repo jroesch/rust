@@ -38,8 +38,6 @@ test = { path = "../libtest" }
 std = { path = "." }
 
 [features]
-stage0 = ["alloc/stage0"]
-not-stage0 = []
 elf-tls = []
 jemalloc = ["alloc_jemalloc"]
 debug-jemalloc = ["alloc_jemalloc/debug"]

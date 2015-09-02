@@ -587,31 +587,29 @@ impl Build {
 
     /// Get the space-separated set of activated features for the standard
     /// library.
-    fn std_features(&self, stage: u32, target: &str) -> String {
-        let stage_arg = if stage == 0 {"std-stage0"} else {"std-not-stage0"};
-        let mut stage_arg = stage_arg.to_string();
-        stage_arg.push_str(" build-std");
+    fn std_features(&self) -> String {
+        let mut features = String::new();
+        features.push_str(" build-std");
         if self.config.elf_tls {
-            stage_arg.push_str(" elf-tls");
+            features.push_str(" elf-tls");
         }
         if self.config.debug_jemalloc {
-            stage_arg.push_str(" debug-jemalloc");
+            features.push_str(" debug-jemalloc");
         }
-        if self.config.use_jemalloc && !target.contains("msvc") {
-            stage_arg.push_str(" std-with-jemalloc");
+        if self.config.use_jemalloc {
+            features.push_str(" std-with-jemalloc");
         }
-        return stage_arg
+        return features
     }
 
     /// Get the space-separated set of activated features for the compiler.
-    fn rustc_features(&self, stage: u32) -> String {
-        let stage_arg = if stage == 0 {"rustc-stage0"} else {"rustc-not-stage0"};
-        let mut stage_arg = stage_arg.to_string();
-        stage_arg.push_str(" rustc");
+    fn rustc_features(&self) -> String {
+        let mut features = String::new();
+        features.push_str(" rustc");
         if self.config.use_jemalloc {
-            stage_arg.push_str(" rustc-with-jemalloc");
+            features.push_str(" rustc-with-jemalloc");
         }
-        return stage_arg
+        return features
     }
 
     /// Component directory that Cargo will produce output into (e.g.
