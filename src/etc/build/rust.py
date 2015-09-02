@@ -8,6 +8,7 @@
 # option. This file may not be copied, modified, or distributed
 # except according to those terms.
 
+import argparse
 import download
 import os
 import subprocess
@@ -97,7 +98,14 @@ class RustBuild:
         if ret != 0:
             exit(ret)
 
-def build_triple():
+def build_triple(config):
+    try:
+        toml = open(config or 'config.toml').read()
+        for line in iter(toml.splitlines()):
+            if line.startswith('build ='):
+                return line[9:-1]
+    except:
+        pass
     try:
         ostype = subprocess.check_output(['uname', '-s']).strip()
         cputype = subprocess.check_output(['uname', '-m']).strip()
@@ -170,12 +178,18 @@ def build_triple():
 
     return cputype + '-' + ostype
 
+parser = argparse.ArgumentParser(description='Build rust')
+parser.add_argument('--config', help='config file')
+
+args = [a for a in sys.argv if a != '-h']
+args, _ = parser.parse_known_args(args)
+
 # Configure initial bootstrap
 rb = RustBuild()
 rb.rust_root = os.path.dirname(os.path.abspath(__file__))
 rb.rust_root = os.path.dirname(os.path.dirname(os.path.dirname(rb.rust_root)))
 rb.build_dir = os.path.join(os.getcwd(), "target")
-rb.build = build_triple();
+rb.build = build_triple(args.config);
 
 # Fetch/build the bootstrap
 rb.download_rust_nightly()
