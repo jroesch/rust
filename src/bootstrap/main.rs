@@ -421,7 +421,7 @@ impl Build {
         self.add_to_sysroot(&out_dir, &sysroot_libdir);
 
         if sysroot_host == target {
-            self.assemble_compiler(stage, target, &host, &rustc);
+            self.assemble_compiler(stage, target, &rustc);
         }
     }
 
@@ -431,8 +431,7 @@ impl Build {
     /// specified to the sysroot location for `host` to be an official compiler.
     /// This means that the `rustc` binary itself will be linked into place
     /// along with all supporting dynamic libraries.
-    fn assemble_compiler(&self, stage: u32, host: &str, orig_host: &str,
-                         rustc: &Path) {
+    fn assemble_compiler(&self, stage: u32, host: &str, rustc: &Path) {
         // Clear out old files
         let rustc_libdir = self.sysroot(stage, host).join(self.libdir(host));
         for f in t!(fs::read_dir(&rustc_libdir)).map(|f| t!(f)) {
@@ -442,7 +441,7 @@ impl Build {
         }
 
         // Link in all built artifacts
-        let sysroot_libdir = self.sysroot_libdir(stage, orig_host, host);
+        let sysroot_libdir = self.sysroot_libdir(stage, host, host);
         for f in t!(fs::read_dir(&sysroot_libdir)).map(|f| t!(f)) {
             let f = f.path();
             let filename = f.file_name().unwrap().to_str().unwrap();
