@@ -6,7 +6,9 @@
 # a custom configuration file can also be specified with `--config` to the build
 # system.
 
-# Various options for tweaking how we compile LLVM
+# =============================================================================
+# Tweaking how LLVM is compiled
+# =============================================================================
 [llvm]
 
 # Indicates whether the LLVM build is a Release or Debug build
@@ -18,9 +20,35 @@
 # Indicates whether ccache is used when building LLVM
 #ccache = false
 
-# Path to the root of the installation of a custom LLVM to link against
+# Path to the root of the installation of a custom LLVM to link against. Note
+# that if this is specifed we don't recompile LLVM at all
 #root = "../path/to/llvm/root"
 
+# =============================================================================
+# General build configuration options
+# =============================================================================
+[build]
+
+# Build triple for the original snapshot compiler. This must be a compiler that
+# nightlies are already produced for. The current platform must be able to run
+# binaries of this build triple and the nightly will be used to bootstrap the
+# first compiler.
+#build = "x86_64-unknown-linux-gnu"    # defaults to your host platform
+
+# In addition to the build triple, other triples to produce full compiler
+# toolchains for. Each of these triples will be bootstrapped from the build
+# triple and then will continue to bootstrap themselves. This platform must
+# currently be able to run all of the triples provided here.
+#host = ["x86_64-unknown-linux-gnu"]   # defaults to just the build triple
+
+# In addition to all host triples, other triples to produce the standard library
+# for. Each host triple will be used to produce a copy of the standard library
+# for each target triple.
+#target = ["x86_64-unknown-linux-gnu"] # defaults to just the build triple
+
+# =============================================================================
+# Options for compiling Rust code itself
+# =============================================================================
 [rust]
 
 # Whether or not to optimize the compiler and standard library

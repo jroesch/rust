@@ -78,9 +78,6 @@ struct Build {
     rustc: PathBuf,
     src: PathBuf,
     out: PathBuf,
-    build: String,
-    host: Vec<String>,
-    target: Vec<String>,
     config: Config,
     skip_stage0: bool,
     skip_stage1: bool,
@@ -102,6 +99,10 @@ pub struct Config {
     rust_debug_assertions: bool,
     rust_debuginfo: bool,
 
+    build: String,
+    host: Vec<String>,
+    target: Vec<String>,
+
     // libstd features
     debug_jemalloc: bool,
     elf_tls: bool,
@@ -121,16 +122,9 @@ fn main() {
     let m = opts.parse(&env::args().skip(1).collect::<Vec<_>>())
                 .unwrap_or_else(|e| panic!("failed to parse options: {}", e));
 
-    let build = env_s("BUILD");
-    let host = vec![build.clone()];
-    let target = host.clone();
-
     let mut build = Build {
         cargo: PathBuf::from(env("CARGO")),
         rustc: PathBuf::from(env("RUSTC")),
-        build: build,
-        host: host,
-        target: target,
         src: PathBuf::from(env("SRC_DIR")),
         out: PathBuf::from(env("BUILD_DIR")),
         skip_stage0: false,
@@ -149,6 +143,9 @@ fn main() {
             rust_optimize: true,
             rust_debug_assertions: false,
             rust_debuginfo: false,
+            build: env_s("BUILD"),
+            host: Vec::new(),
+            target: Vec::new(),
         },
     };
     let cfg_file = m.opt_str("config").or_else(|| {
@@ -162,7 +159,7 @@ fn main() {
         config::configure(&mut build.config, &cfg);
     }
     if m.opt_present("v") {
-        build.config.verbose = false;
+        build.config.verbose = true;
     }
     build.skip_stage2 = m.opt_present("skip-stage2");
     build.skip_stage1 = build.skip_stage2 || m.opt_present("skip-stage1");
@@ -190,33 +187,33 @@ enum Compiler<'a> {
 impl Build {
     fn build(&self) {
         self.update_submodules();
-        for host in self.host.iter() {
+        for host in self.config.host.iter() {
             self.build_llvm(host);
         }
-        for target in self.target.iter() {
+        for target in self.config.target.iter() {
             self.build_compiler_rt(target);
         }
         if !self.skip_stage0 {
-            self.build_stage(0, &self.build, &self.build,
+            self.build_stage(0, &self.config.build, &self.config.build,
                              &Compiler::NightlySnapshot);
 
-            for host in self.host.iter() {
-                if self.build != *host {
+            for host in self.config.host.iter() {
+                if self.config.build != *host {
                     self.build_stage(0, host, host,
-                                     &Compiler::Built(0, &self.build));
+                                     &Compiler::Built(0, &self.config.build));
                 }
             }
         }
         if !self.skip_stage1 {
-            for host in self.host.iter() {
+            for host in self.config.host.iter() {
                 self.build_stage(1, host, host, &Compiler::Built(0, host));
             }
         }
         if !self.skip_stage2 {
-            for host in self.host.iter() {
+            for host in self.config.host.iter() {
                 let compiler = Compiler::Built(1, host);
-                for target in self.target.iter() {
-                    if self.host.contains(target) {
+                for target in self.config.target.iter() {
+                    if self.config.host.contains(target) {
                         self.build_stage(2, host, target, &compiler);
                     } else {
                         self.build_std(2, host, target, &compiler);
@@ -244,7 +241,7 @@ impl Build {
     }
 
     fn build_llvm(&self, target: &str) {
-        if self.config.llvm_root.is_some() && target == self.build {
+        if self.config.llvm_root.is_some() && target == self.config.build {
             return
         }
         let dst = self.llvm_out(target);
@@ -273,7 +270,7 @@ impl Build {
            .define("LLVM_ENABLE_TERMINFO", "OFF")
            .define("LLVM_ENABLE_LIBEDIT", "OFF");
 
-        if target.contains("i686") && self.build.contains("x86_64") {
+        if target.contains("i686") && self.config.build.contains("x86_64") {
             cfg.define("LLVM_BUILD_32_BITS", "ON");
         }
         if self.config.ccache {
@@ -393,7 +390,7 @@ impl Build {
                  .arg("--bin").arg("rustc")
                  .arg("--manifest-path")
                  .arg(self.src.join("src/rustc/Cargo.toml"));
-            if target == self.build {
+            if target == self.config.build {
                 if let Some(ref s) = self.config.llvm_root {
                     let cfg = self.exe("llvm-config", target);
                     cargo.env("LLVM_CONFIG", s.join("bin").join(cfg));
@@ -549,7 +546,7 @@ impl Build {
     /// Get the host triple for a particular compiler.
     fn compiler_host(&self, compiler: &Compiler) -> String {
         match *compiler {
-            Compiler::NightlySnapshot => self.build.clone(),
+            Compiler::NightlySnapshot => self.config.build.clone(),
             Compiler::Built(_, host) => host.to_string(),
         }
     }
