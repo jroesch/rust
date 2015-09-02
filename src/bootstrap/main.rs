@@ -20,7 +20,6 @@
 //      * enable-compiler-docs
 //      * disable-optimize-tests
 //      * llvm libc++
-//      * local-rust
 //      * static-stdcpp
 //      * llvm-version-check
 //      * android cross paths
@@ -104,6 +103,8 @@ pub struct Config {
     build: String,
     host: Vec<String>,
     target: Vec<String>,
+    rustc: Option<String>,
+    cargo: Option<String>,
 
     // libstd features
     debug_jemalloc: bool,
@@ -131,10 +132,11 @@ fn main() {
     }
 
     let mut build = Build {
-        cargo: PathBuf::from(env("CARGO")),
-        rustc: PathBuf::from(env("RUSTC")),
-        src: PathBuf::from(env("SRC_DIR")),
-        out: PathBuf::from(env("BUILD_DIR")),
+        cargo: PathBuf::new(),
+        rustc: PathBuf::new(),
+        src: Path::new(file!()).parent().unwrap().parent().unwrap()
+                               .parent().unwrap().to_owned(),
+        out: t!(env::current_dir()).join("target"),
         skip_stage0: false,
         skip_stage1: false,
         skip_stage2: false,
@@ -161,6 +163,15 @@ fn main() {
     if m.opt_present("v") {
         build.config.verbose = true;
     }
+
+    build.rustc = match build.config.rustc {
+        Some(ref s) => PathBuf::from(s),
+        None => PathBuf::from(env("RUSTC")),
+    };
+    build.cargo = match build.config.cargo {
+        Some(ref s) => PathBuf::from(s),
+        None => PathBuf::from(env("CARGO")),
+    };
     build.skip_stage2 = m.opt_present("skip-stage2");
     build.skip_stage1 = build.skip_stage2 || m.opt_present("skip-stage1");
     build.skip_stage0 = build.skip_stage1 || m.opt_present("skip-stage0");

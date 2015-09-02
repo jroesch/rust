@@ -24,7 +24,8 @@ class RustBuild:
         if not os.path.exists(cargo_cache):
             os.makedirs(cargo_cache)
 
-        if not os.path.exists(self.rustc()):
+        if not os.path.exists(self.rustc()) and \
+           self.rustc().startswith(self.rustc_root()):
             filename = "rustc-nightly-" + self.build + ".tar.gz"
             url = "https://static.rust-lang.org/dist/" + self.snap_rustc_date()
             tarball = os.path.join(rustc_cache, filename)
@@ -32,7 +33,8 @@ class RustBuild:
                 download.get(url + "/" + filename, tarball)
             download.unpack(tarball, self.rustc_root())
 
-        if not os.path.exists(self.cargo()):
+        if not os.path.exists(self.cargo()) and \
+           self.cargo().startswith(self.cargo_root()):
             filename = "cargo-nightly-" + self.build + ".tar.gz"
             url = "https://static.rust-lang.org/cargo-dist/" + self.snap_cargo_date()
             tarball = os.path.join(cargo_cache, filename)
@@ -59,10 +61,16 @@ class RustBuild:
                             self.snap_rustc_date())
 
     def cargo(self):
+        for line in iter(self.config_toml.splitlines()):
+            if line.startswith('cargo ='):
+                return line[9:-1]
         return os.path.join(self.cargo_root(),
                             "cargo/bin/cargo" + self.exe_suffix())
 
     def rustc(self):
+        for line in iter(self.config_toml.splitlines()):
+            if line.startswith('rustc ='):
+                return line[9:-1]
         return os.path.join(self.rustc_root(),
                             "rustc/bin/rustc" + self.exe_suffix())
 
@@ -204,7 +212,5 @@ args.extend(sys.argv[1:])
 env = os.environ.copy()
 env["RUSTC"] = rb.rustc()
 env["CARGO"] = rb.cargo()
-env["BUILD_DIR"] = rb.build_dir
-env["SRC_DIR"] = rb.rust_root
 env["BUILD"] = rb.build
 rb.run(args, env)

@@ -11,16 +11,18 @@ use Config;
 
 #[derive(RustcDecodable)]
 struct TomlConfig {
-    build: Build,
+    build: Option<Build>,
     llvm: Option<Llvm>,
     rust: Option<Rust>,
 }
 
-#[derive(RustcDecodable)]
+#[derive(RustcDecodable, Default, Clone)]
 struct Build {
     build: Option<String>,
     host: Vec<String>,
     target: Vec<String>,
+    cargo: Option<String>,
+    rustc: Option<String>,
 }
 
 #[derive(RustcDecodable)]
@@ -71,18 +73,22 @@ pub fn configure(config: &mut Config, file: &str) {
         }
     };
 
-    set(&mut config.build, toml.build.build.clone());
+    let build = toml.build.clone().unwrap_or(Build::default());
+    set(&mut config.build, build.build.clone());
     config.host.push(config.build.clone());
-    for host in toml.build.host.iter() {
+    for host in build.host.iter() {
         if !config.host.contains(host) {
             config.host.push(host.clone());
         }
     }
-    for target in config.host.iter().chain(&toml.build.target) {
+    for target in config.host.iter().chain(&build.target) {
         if !config.target.contains(target) {
             config.target.push(target.clone());
         }
     }
+    config.rustc = build.rustc;
+    config.cargo = build.cargo;
+
     if let Some(ref llvm) = toml.llvm {
         set(&mut config.ccache, llvm.ccache);
         set(&mut config.llvm_assertions, llvm.assertions);
