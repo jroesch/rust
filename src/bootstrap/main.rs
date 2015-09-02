@@ -247,9 +247,14 @@ impl Build {
     }
 
     fn build_llvm(&self, target: &str) {
+        // If we're using a custom LLVM bail out here, but we can only use a
+        // custom LLVM for the build triple.
         if self.config.llvm_root.is_some() && target == self.config.build {
             return
         }
+
+        // If the cleaning trigger is newer than our built artifacts (or if the
+        // artifacts are missing) then we keep going, otherwise we bail out.
         let dst = self.llvm_out(target);
         let stamp = self.src.join("src/rustllvm/llvm-auto-clean-trigger");
         let llvm_config = dst.join("bin").join(self.exe("llvm-config", target));
@@ -257,6 +262,7 @@ impl Build {
         if fs::metadata(llvm_config).is_ok() {
             return
         }
+
         let _ = fs::remove_dir_all(&dst);
         t!(fs::create_dir_all(&dst));
         let assertions = if self.config.llvm_assertions {"ON"} else {"OFF"};
@@ -302,6 +308,10 @@ impl Build {
             return
         }
         let src = self.src.join("src/compiler-rt");
+
+        // Apparently the makefiles choke on Windows paths (e.g. when we're
+        // building for MSVC) so convert them all to unix-like MSYS paths here.
+        // Would love to not have to use `make` to build compiler-rt on MSVC!
         let unix_src = path2unix(&self.src.join("src/compiler-rt"));
         let unix_dst = path2unix(&dst);
         let mut cmd = Command::new("make");
@@ -345,23 +355,22 @@ impl Build {
     fn build_std(&self, stage: u32, sysroot_host: &str, target: &str,
                  compiler: &Compiler) {
         let host = self.compiler_host(compiler);
-
-        // First up, build the standard library. Crates above the standard
-        // library implicitly find the standard library in the sysroot and not
-        // through Cargo, so after we're done here we start to assemble the
-        // sysroot.
         let out_dir = self.stage_out(stage, &host, true);
         let shim = self.libstd_shim(stage, &host, target);
         let rustc = self.compiler(compiler);
         let libdir = self.sysroot_libdir(stage, sysroot_host, target);
+
+        // Move compiler-rt into place as it'll be required by the compiler when
+        // building the standard library to link libstd.dll
         let _ = fs::remove_dir_all(&libdir);
+        t!(fs::create_dir_all(&libdir));
+        t!(fs::hard_link(self.compiler_rt_out(target)
+                             .join("triple/builtins/libcompiler_rt.a"),
+                         libdir.join("libcompiler-rt.a")));
+
         self.clear_if_dirty(&out_dir, &rustc, &shim, || {
             println!("Building stage{} std artifacts ({} -> {})", stage,
                      host, target);
-            t!(fs::create_dir_all(&libdir));
-            t!(fs::hard_link(self.compiler_rt_out(target)
-                                 .join("triple/builtins/libcompiler_rt.a"),
-                             libdir.join("libcompiler-rt.a")));
             let stage_arg = self.stage_arg(stage, compiler);
             let features = self.std_features(stage_arg, target);
             self.run(self.cargo(stage, compiler, &out_dir, sysroot_host, target)
@@ -383,12 +392,11 @@ impl Build {
     fn build_rustc(&self, stage: u32, sysroot_host: &str, target: &str,
                    compiler: &Compiler) {
         let host = self.compiler_host(compiler);
-        // Now that our compiler is prepp'd to generate binaries for `target`,
-        // run the build on the full compiler.
         let out_dir = self.stage_out(stage, &host, false);
-        let fname = self.exe("rustc", target);
-        let rustc = self.cargo_out(stage, &host, false, target).join(&fname);
+        let rustc = self.cargo_out(stage, &host, false, target)
+                        .join(self.exe("rustc", target));
         let shim = self.libstd_shim(stage, &host, target);
+
         self.clear_if_dirty(&out_dir, &shim, &rustc, || {
             println!("Building stage{} compiler artifacts ({} -> {})", stage,
                      host, target);
@@ -417,6 +425,12 @@ impl Build {
         }
     }
 
+    /// Prepare a new compiler for use in later stages.
+    ///
+    /// This will link the compiler built by `orig_host` during the stage
+    /// specified to the sysroot location for `host` to be an official compiler.
+    /// This means that the `rustc` binary itself will be linked into place
+    /// along with all supporting dynamic libraries.
     fn assemble_compiler(&self, stage: u32, host: &str, orig_host: &str,
                          rustc: &Path) {
         // Clear out old files
@@ -484,7 +498,8 @@ impl Build {
         // Specify some variuos options for build scripts used throughout the
         // build.
         cargo.env(format!("CC_{}", target), cc(target))
-             .env(format!("AR_{}", target), ar(target));
+             .env(format!("AR_{}", target), ar(target))
+             .env(format!("CXX_{}", target), cxx(target));
 
         if self.config.verbose {
             cargo.arg("-v");
