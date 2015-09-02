@@ -8,7 +8,9 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use std::process::Command;
+#![deny(warnings)]
+
+use std::process::{Command, Stdio};
 
 pub fn run(cmd: &mut Command) {
     println!("running: {:?}", cmd);
@@ -23,6 +25,18 @@ pub fn run_silent(cmd: &mut Command) {
     if !status.success() {
         fail(&format!("command did not execute successfully, got: {}", status));
     }
+}
+
+pub fn output(cmd: &mut Command) -> String {
+    println!("running {:?}", cmd);
+    let output = match cmd.stderr(Stdio::inherit()).output() {
+        Ok(status) => status,
+        Err(e) => fail(&format!("failed to execute command: {}", e)),
+    };
+    if !output.status.success() {
+        panic!("expected success, got: {}", output.status);
+    }
+    String::from_utf8(output.stdout).unwrap()
 }
 
 pub fn cc(target: &str) -> String {

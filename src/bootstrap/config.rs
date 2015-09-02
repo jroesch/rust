@@ -31,6 +31,7 @@ struct Llvm {
     assertions: Option<bool>,
     optimize: Option<bool>,
     root: Option<String>,
+    version_check: Option<bool>,
 }
 
 #[derive(RustcDecodable)]
@@ -94,6 +95,7 @@ pub fn configure(config: &mut Config, file: &str) {
         set(&mut config.llvm_assertions, llvm.assertions);
         set(&mut config.llvm_optimize, llvm.optimize);
         set(&mut config.llvm_optimize, llvm.optimize);
+        set(&mut config.llvm_version_check, llvm.version_check);
 
         if let Some(ref s) = llvm.root {
             config.llvm_root = Some(env::current_dir().unwrap().join(s));

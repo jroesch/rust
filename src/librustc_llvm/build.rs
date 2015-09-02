@@ -9,10 +9,13 @@
 // except according to those terms.
 
 extern crate gcc;
+extern crate build_helper;
 
 use std::process::Command;
 use std::env;
 use std::path::PathBuf;
+
+use build_helper::output;
 
 fn main() {
     let target = env::var("TARGET").unwrap();
@@ -85,13 +88,4 @@ fn main() {
             println!("cargo:rustc-link-lib=stdc++");
         }
     }
-}
-
-fn output(cmd: &mut Command) -> String {
-    println!("running {:?}", cmd);
-    let output = cmd.output().unwrap();
-    if !output.status.success() {
-        panic!("expected success, got: {}", output.status);
-    }
-    String::from_utf8(output.stdout).unwrap()
 }

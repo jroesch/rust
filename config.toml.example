@@ -24,6 +24,11 @@
 # that if this is specifed we don't recompile LLVM at all
 #root = "../path/to/llvm/root"
 
+# If an external LLVM root is specified, we automatically check the version by
+# default to make sure it's within the range that we're expecting, but setting
+# this flag will indicate that this version check should not be done.
+#version-check = false
+
 # =============================================================================
 # General build configuration options
 # =============================================================================

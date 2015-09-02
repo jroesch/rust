@@ -19,10 +19,7 @@
 //      * disable-docs
 //      * enable-compiler-docs
 //      * disable-optimize-tests
-//      * llvm libc++
 //      * static-stdcpp
-//      * llvm-version-check
-//      * android cross paths
 //      * release-channel
 //      * musl-root
 //      * clang
@@ -58,7 +55,7 @@ use std::fs;
 use std::path::{Path, PathBuf, Component, Prefix};
 use std::process::Command;
 
-use build_helper::{run, run_silent, ar, cflags, cc, cxx};
+use build_helper::{run, run_silent, ar, cflags, cc, cxx, output};
 use bootstrap::{dylib_path_var, dylib_path};
 use filetime::FileTime;
 use getopts::Options;
@@ -91,6 +88,7 @@ pub struct Config {
     llvm_assertions: bool,
     llvm_optimize: bool,
     llvm_root: Option<PathBuf>,
+    llvm_version_check: bool,
 
     // rust codegen options
     rust_optimize: bool,
@@ -254,7 +252,10 @@ impl Build {
     fn build_llvm(&self, target: &str) {
         // If we're using a custom LLVM bail out here, but we can only use a
         // custom LLVM for the build triple.
-        if self.config.llvm_root.is_some() && target == self.config.build {
+        if target == self.config.build {
+            if let Some(ref s) = self.config.llvm_root {
+                self.check_llvm_version(s);
+            }
             return
         }
 
@@ -304,6 +305,19 @@ impl Build {
             cfg.build_arg("-j").build_arg(num_cpus::get().to_string());
         }
         cfg.build();
+    }
+
+    fn check_llvm_version(&self, llvm_root: &Path) {
+        if !self.config.llvm_version_check { return }
+
+        let llvm_config = self.exe("llvm-config", &self.config.build);
+        let mut cmd = Command::new(llvm_root.join("bin").join(llvm_config));
+        let version = output(cmd.arg("--version"));
+        if version.starts_with("3.5") || version.starts_with("3.6") ||
+           version.starts_with("3.7") {
+            return
+        }
+        panic!("\n\nbad LLVM version: {}, need >=3.5\n\n", version)
     }
 
     fn build_compiler_rt(&self, target: &str) {
