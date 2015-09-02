@@ -38,6 +38,8 @@ struct Rust {
     debuginfo: Option<bool>,
     debug_jemalloc: Option<bool>,
     use_jemalloc: Option<bool>,
+    default_linker: Option<String>,
+    default_ar: Option<String>,
 }
 
 pub fn configure(config: &mut Config, file: &str) {
@@ -91,6 +93,8 @@ pub fn configure(config: &mut Config, file: &str) {
         set(&mut config.rust_optimize, rust.optimize);
         set(&mut config.debug_jemalloc, rust.debug_jemalloc);
         set(&mut config.use_jemalloc, rust.use_jemalloc);
+        config.rustc_default_linker = rust.default_linker.clone();
+        config.rustc_default_ar = rust.default_ar.clone();
     }
 }
 

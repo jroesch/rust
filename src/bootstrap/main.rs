@@ -26,8 +26,6 @@
 //      * android cross paths
 //      * release-channel
 //      * musl-root
-//      * default-linker
-//      * default-ar
 //      * clang
 //  * compiler selection bullshit
 //  * NDK bullshit
@@ -84,6 +82,7 @@ struct Build {
     skip_stage2: bool,
 }
 
+#[derive(Default)]
 pub struct Config {
     ccache: bool,
     verbose: bool,
@@ -98,6 +97,8 @@ pub struct Config {
     rust_optimize: bool,
     rust_debug_assertions: bool,
     rust_debuginfo: bool,
+    rustc_default_linker: Option<String>,
+    rustc_default_ar: Option<String>,
 
     build: String,
     host: Vec<String>,
@@ -136,24 +137,15 @@ fn main() {
         skip_stage0: false,
         skip_stage1: false,
         skip_stage2: false,
-        config: Config {
-            llvm_assertions: false,
-            llvm_optimize: true,
-            llvm_root: None,
-            ccache: false,
-            verbose: false,
-            elf_tls: true,
-            debug_jemalloc: false,
-            use_jemalloc: true,
-            submodules: false,
-            rust_optimize: true,
-            rust_debug_assertions: false,
-            rust_debuginfo: false,
-            build: env_s("BUILD"),
-            host: Vec::new(),
-            target: Vec::new(),
-        },
+        config: Default::default(),
     };
+
+    build.config.llvm_optimize = true;
+    build.config.elf_tls = true;
+    build.config.use_jemalloc = true;
+    build.config.rust_optimize = true;
+    build.config.build = env_s("BUILD");
+
     let cfg_file = m.opt_str("config").or_else(|| {
         if fs::metadata("config.toml").is_ok() {
             Some("config.toml".to_string())
@@ -408,12 +400,23 @@ impl Build {
                  .arg("--bin").arg("rustc")
                  .arg("--manifest-path")
                  .arg(self.src.join("src/rustc/Cargo.toml"));
+
+            // Set some configuration variables picked up by build scripts and
+            // the compiler alike
             if target == self.config.build {
                 if let Some(ref s) = self.config.llvm_root {
                     let cfg = self.exe("llvm-config", target);
                     cargo.env("LLVM_CONFIG", s.join("bin").join(cfg));
                 }
             }
+            if let Some(ref s) = self.config.rustc_default_linker {
+                cargo.env("CFG_DEFAULT_LINKER", s);
+            }
+            if let Some(ref s) = self.config.rustc_default_ar {
+                cargo.env("CFG_DEFAULT_AR", s);
+            }
+
+            // And run!
             self.run(&mut cargo);
         });
         t!(fs::create_dir_all(self.sysroot(stage, sysroot_host).join("bin")));

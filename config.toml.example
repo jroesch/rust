@@ -71,3 +71,11 @@
 # primarily available for OSX 10.6 support where ELF-based TLS is not available,
 # so the standard library needs to disable it.
 #elf-tls = true
+
+# The default linker that will be used by the generated compiler. Note that this
+# is not the linker used to link said compiler.
+#default-linker = "cc"
+
+# The default ar utility that will be used by the generated compiler if LLVM
+# cannot be used. Note that this is not used to assemble said compiler.
+#default-ar = "ar"
