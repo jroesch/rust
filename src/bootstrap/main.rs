@@ -14,7 +14,6 @@
 //  * build compiletest
 //  * make dist
 //  * generate docs
-//  * external llvm root
 //  * external jemalloc
 //  * configure options
 //      * disable-docs
@@ -96,6 +95,7 @@ pub struct Config {
     // llvm codegen options
     llvm_assertions: bool,
     llvm_optimize: bool,
+    llvm_root: Option<PathBuf>,
 
     // rust codegen options
     rust_optimize: bool,
@@ -139,6 +139,7 @@ fn main() {
         config: Config {
             llvm_assertions: false,
             llvm_optimize: true,
+            llvm_root: None,
             ccache: false,
             verbose: false,
             elf_tls: true,
@@ -243,6 +244,9 @@ impl Build {
     }
 
     fn build_llvm(&self, target: &str) {
+        if self.config.llvm_root.is_some() && target == self.build {
+            return
+        }
         let dst = self.llvm_out(target);
         let stamp = self.src.join("src/rustllvm/llvm-auto-clean-trigger");
         let llvm_config = dst.join("bin").join(self.exe("llvm-config", target));
@@ -383,12 +387,19 @@ impl Build {
         self.clear_if_dirty(&out_dir, &shim, &rustc, || {
             println!("Building stage{} compiler artifacts ({} -> {})", stage,
                      host, target);
-            self.run(self.cargo(stage, false, compiler, target)
-                         .env("CFG_COMPILER_HOST_TRIPLE", target)
-                         .arg("--features").arg(self.rustc_features(stage))
-                         .arg("--bin").arg("rustc")
-                         .arg("--manifest-path")
-                         .arg(self.src.join("src/rustc/Cargo.toml")));
+            let mut cargo = self.cargo(stage, false, compiler, target);
+            cargo.env("CFG_COMPILER_HOST_TRIPLE", target)
+                 .arg("--features").arg(self.rustc_features(stage))
+                 .arg("--bin").arg("rustc")
+                 .arg("--manifest-path")
+                 .arg(self.src.join("src/rustc/Cargo.toml"));
+            if target == self.build {
+                if let Some(ref s) = self.config.llvm_root {
+                    let cfg = self.exe("llvm-config", target);
+                    cargo.env("LLVM_CONFIG", s.join("bin").join(cfg));
+                }
+            }
+            self.run(&mut cargo);
         });
         t!(fs::create_dir_all(self.sysroot(stage, sysroot_host).join("bin")));
         let sysroot_libdir = self.sysroot_libdir(stage, sysroot_host, target);

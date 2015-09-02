@@ -1,3 +1,4 @@
+use std::env;
 use std::fs::File;
 use std::io::prelude::*;
 use std::process;
@@ -18,6 +19,7 @@ struct Llvm {
     ccache: Option<bool>,
     assertions: Option<bool>,
     optimize: Option<bool>,
+    root: Option<String>,
 }
 
 #[derive(RustcDecodable)]
@@ -61,6 +63,11 @@ pub fn configure(config: &mut Config, file: &str) {
         set(&mut config.ccache, llvm.ccache);
         set(&mut config.llvm_assertions, llvm.assertions);
         set(&mut config.llvm_optimize, llvm.optimize);
+        set(&mut config.llvm_optimize, llvm.optimize);
+
+        if let Some(ref s) = llvm.root {
+            config.llvm_root = Some(env::current_dir().unwrap().join(s));
+        }
     }
     if let Some(ref rust) = toml.rust {
         set(&mut config.elf_tls, rust.elf_tls);
@@ -72,7 +79,7 @@ pub fn configure(config: &mut Config, file: &str) {
     }
 }
 
-fn set<T: Copy>(field: &mut T, val: Option<T>) {
+fn set<T>(field: &mut T, val: Option<T>) {
     if let Some(v) = val {
         *field = v;
     }

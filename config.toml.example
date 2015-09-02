@@ -18,6 +18,9 @@
 # Indicates whether ccache is used when building LLVM
 #ccache = false
 
+# Path to the root of the installation of a custom LLVM to link against
+#root = "../path/to/llvm/root"
+
 [rust]
 
 # Whether or not to optimize the compiler and standard library
