@@ -21,6 +21,7 @@ rustc_lint = { path = "../librustc_lint" }
 rustc_llvm = { path = "../librustc_llvm" }
 rustc_privacy = { path = "../librustc_privacy" }
 rustc_resolve = { path = "../librustc_resolve" }
+tir = { path = "../librustc_tir" }
 rustc_trans = { path = "../librustc_trans" }
 rustc_typeck = { path = "../librustc_typeck" }
 serialize = { path = "../libserialize" }

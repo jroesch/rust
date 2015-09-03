@@ -17,6 +17,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "aho-corasick"
+version = "0.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+dependencies = [
+ "memchr 0.1.6 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
 name = "alloc"
 version = "0.0.0"
 dependencies = [
@@ -64,6 +72,30 @@ name = "core"
 version = "0.0.0"
 
 [[package]]
+name = "diff"
+version = "0.1.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+
+[[package]]
+name = "docopt"
+version = "0.6.72"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+dependencies = [
+ "regex 0.1.41 (registry+https://github.com/rust-lang/crates.io-index)",
+ "rustc-serialize 0.3.16 (registry+https://github.com/rust-lang/crates.io-index)",
+ "strsim 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
+name = "env_logger"
+version = "0.3.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+dependencies = [
+ "log 0.3.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "regex 0.1.41 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
 name = "flate"
 version = "0.0.0"
 dependencies = [
@@ -93,6 +125,62 @@ name = "graphviz"
 version = "0.0.0"
 
 [[package]]
+name = "itertools"
+version = "0.3.25"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+
+[[package]]
+name = "kernel32-sys"
+version = "0.1.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+dependencies = [
+ "winapi 0.2.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "winapi-build 0.1.1 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
+name = "lalrpop"
+version = "0.5.0"
+source = "git+https://github.com/nikomatsakis/lalrpop#098cfb1639ed00e74962c6555b0996bed3427e06"
+dependencies = [
+ "diff 0.1.5 (registry+https://github.com/rust-lang/crates.io-index)",
+ "itertools 0.3.25 (registry+https://github.com/rust-lang/crates.io-index)",
+ "lalrpop-intern 0.5.0 (git+https://github.com/nikomatsakis/lalrpop)",
+ "lalrpop-snap 0.5.0 (git+https://github.com/nikomatsakis/lalrpop)",
+ "lalrpop-util 0.5.0 (git+https://github.com/nikomatsakis/lalrpop)",
+ "rand 0.3.11 (registry+https://github.com/rust-lang/crates.io-index)",
+ "regex 0.1.41 (registry+https://github.com/rust-lang/crates.io-index)",
+ "term 0.2.11 (registry+https://github.com/rust-lang/crates.io-index)",
+ "unicode-xid 0.0.2 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
+name = "lalrpop-intern"
+version = "0.5.0"
+source = "git+https://github.com/nikomatsakis/lalrpop#098cfb1639ed00e74962c6555b0996bed3427e06"
+
+[[package]]
+name = "lalrpop-snap"
+version = "0.5.0"
+source = "git+https://github.com/nikomatsakis/lalrpop#098cfb1639ed00e74962c6555b0996bed3427e06"
+dependencies = [
+ "diff 0.1.5 (registry+https://github.com/rust-lang/crates.io-index)",
+ "itertools 0.3.25 (registry+https://github.com/rust-lang/crates.io-index)",
+ "lalrpop-intern 0.5.0 (git+https://github.com/nikomatsakis/lalrpop)",
+ "lalrpop-util 0.5.0 (git+https://github.com/nikomatsakis/lalrpop)",
+ "rand 0.3.11 (registry+https://github.com/rust-lang/crates.io-index)",
+ "regex 0.1.41 (registry+https://github.com/rust-lang/crates.io-index)",
+ "rusty-peg 0.3.0 (registry+https://github.com/rust-lang/crates.io-index)",
+ "term 0.2.11 (registry+https://github.com/rust-lang/crates.io-index)",
+ "unicode-xid 0.0.2 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
+name = "lalrpop-util"
+version = "0.5.0"
+source = "git+https://github.com/nikomatsakis/lalrpop#098cfb1639ed00e74962c6555b0996bed3427e06"
+
+[[package]]
 name = "libc"
 version = "0.0.0"
 dependencies = [
@@ -100,8 +188,29 @@ dependencies = [
 ]
 
 [[package]]
+name = "libc"
+version = "0.1.10"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+
+[[package]]
 name = "log"
 version = "0.0.0"
+
+[[package]]
+name = "log"
+version = "0.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+dependencies = [
+ "libc 0.1.10 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
+name = "memchr"
+version = "0.1.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+dependencies = [
+ "libc 0.1.10 (registry+https://github.com/rust-lang/crates.io-index)",
+]
 
 [[package]]
 name = "rand"
@@ -111,12 +220,45 @@ dependencies = [
 ]
 
 [[package]]
+name = "rand"
+version = "0.3.11"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+dependencies = [
+ "advapi32-sys 0.1.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "libc 0.1.10 (registry+https://github.com/rust-lang/crates.io-index)",
+ "winapi 0.2.2 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
 name = "rbml"
 version = "0.0.0"
 dependencies = [
  "log 0.0.0",
  "serialize 0.0.0",
 ]
+
+[[package]]
+name = "readline"
+version = "0.1.0"
+source = "git+https://github.com/shaleh/rust-readline#8d6cc7e6dec14500563f35beb0b5524f2657bb43"
+dependencies = [
+ "libc 0.1.10 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
+name = "regex"
+version = "0.1.41"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+dependencies = [
+ "aho-corasick 0.3.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "memchr 0.1.6 (registry+https://github.com/rust-lang/crates.io-index)",
+ "regex-syntax 0.2.1 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
+name = "regex-syntax"
+version = "0.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
 
 [[package]]
 name = "rustc"
@@ -135,6 +277,11 @@ dependencies = [
  "serialize 0.0.0",
  "syntax 0.0.0",
 ]
+
+[[package]]
+name = "rustc-serialize"
+version = "0.3.16"
+source = "registry+https://github.com/rust-lang/crates.io-index"
 
 [[package]]
 name = "rustc_back"
@@ -191,6 +338,7 @@ dependencies = [
  "rustc_typeck 0.0.0",
  "serialize 0.0.0",
  "syntax 0.0.0",
+ "tir 0.1.0",
 ]
 
 [[package]]
@@ -273,6 +421,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "rusty-peg"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+dependencies = [
+ "regex 0.1.41 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
 name = "serialize"
 version = "0.0.0"
 dependencies = [
@@ -297,6 +453,11 @@ dependencies = [
 ]
 
 [[package]]
+name = "strsim"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+
+[[package]]
 name = "syntax"
 version = "0.0.0"
 dependencies = [
@@ -313,6 +474,34 @@ version = "0.0.0"
 dependencies = [
  "log 0.0.0",
 ]
+
+[[package]]
+name = "term"
+version = "0.2.11"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+dependencies = [
+ "kernel32-sys 0.1.4 (registry+https://github.com/rust-lang/crates.io-index)",
+ "winapi 0.2.2 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
+name = "tir"
+version = "0.1.0"
+dependencies = [
+ "docopt 0.6.72 (registry+https://github.com/rust-lang/crates.io-index)",
+ "env_logger 0.3.1 (registry+https://github.com/rust-lang/crates.io-index)",
+ "lalrpop 0.5.0 (git+https://github.com/nikomatsakis/lalrpop)",
+ "lalrpop-util 0.5.0 (git+https://github.com/nikomatsakis/lalrpop)",
+ "log 0.3.2 (registry+https://github.com/rust-lang/crates.io-index)",
+ "readline 0.1.0 (git+https://github.com/shaleh/rust-readline)",
+ "rustc-serialize 0.3.16 (registry+https://github.com/rust-lang/crates.io-index)",
+ "term 0.2.11 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
+name = "unicode-xid"
+version = "0.0.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
 
 [[package]]
 name = "winapi"
