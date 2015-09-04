@@ -190,7 +190,8 @@ impl<'fcx, 'a,'tcx> AdjustBorrowKind<'fcx, 'a,'tcx> {
         debug!("analyze_closure(id={:?}, body.id={:?})", id, body.id);
 
         {
-            let cell = panic!(); // RefCell::new(&mut self.fcx.infcx());
+            let mut infcx = self.fcx.infcx();
+            let cell = RefCell::new(&mut *infcx);
             let mut euv = euv::ExprUseVisitor::new(self, &cell);
             euv.walk_fn(decl, body);
         }

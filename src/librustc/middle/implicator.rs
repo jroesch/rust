@@ -74,9 +74,9 @@ impl<'infcx,'a, 'tcx> Implicator<'infcx,'a, 'tcx> {
         self.infcx.tcx
     }
 
-    fn infcx(&mut self) -> &mut InferCtxt<'a, 'tcx> {
-        self.infcx
-    }
+    // fn infcx(&mut self) -> &mut InferCtxt<'a, 'tcx> {
+    //     self.infcx
+    // }
 
     fn accumulate_from_ty(&mut self, ty: Ty<'tcx>) {
         debug!("accumulate_from_ty(ty={:?})",

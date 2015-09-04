@@ -33,7 +33,7 @@ use syntax::ast;
 use syntax::ptr::P;
 use syntax::codemap::Span;
 
-use std::cell::{RefCell};
+use std::cell::{RefCell, Ref};
 
 ///////////////////////////////////////////////////////////////////////////
 // The Delegate trait
@@ -308,9 +308,13 @@ impl<'d,'t,'a,'tcx> ExprUseVisitor<'d,'t,'a,'tcx> {
             self.walk_irrefutable_pat(arg_cmt, &*arg.pat);
         }
     }
-    fn tcx(&self) -> &ty::ctxt<'tcx> {
-        self.typer.borrow().tcx
 
+    fn tcx(&self) -> Ref<ty::ctxt<'tcx>> {
+        fn project_typer<'a, 'tcx, 'c>(r: &'c infer::InferCtxt<'a, 'tcx>) -> &'c ty::ctxt<'tcx> {
+            r.tcx
+        }
+
+        Ref::map(self.typer.borrow(), project_typer)
     }
 
     fn delegate_consume(&mut self,
@@ -673,6 +677,7 @@ impl<'d,'t,'a,'tcx> ExprUseVisitor<'d,'t,'a,'tcx> {
         // expression that will actually be used
         if let ty::TyStruct(def, substs) = with_cmt.ty.sty {
             // Consume those fields of the with expression that are needed.
+            }
             for with_field in &def.struct_variant().fields {
                 if !contains_field_named(with_field, fields) {
                     let cmt_field = self.mc.cat_field(
@@ -1202,14 +1207,14 @@ impl<'d,'t,'a,'tcx> ExprUseVisitor<'d,'t,'a,'tcx> {
         // Create the cmt for the variable being borrowed, from the
         // caller's perspective
         let var_id = upvar_def.var_id();
-        let var_ty = try!(self.typer.borrow_mut().node_ty(var_id));
+        let var_ty = try!(self.typer.borrow().node_ty(var_id));
         self.mc.cat_def(closure_id, closure_span, var_ty, upvar_def)
     }
 }
 
 fn copy_or_move<'a, 'tcx>(typer: &mut infer::InferCtxt<'a, 'tcx>,
-                          cmt: &mc::cmt<'tcx>,
-                          move_reason: MoveReason)
+                      cmt: &mc::cmt<'tcx>,
+                      move_reason: MoveReason)
                       -> ConsumeMode
 {
     if typer.type_moves_by_default(cmt.ty, cmt.span) {

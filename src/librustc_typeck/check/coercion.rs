@@ -277,7 +277,9 @@ impl<'fcx, 'f, 'tcx> Coerce<'fcx, 'f, 'tcx> {
         };
         let source = source.adjust_for_autoref(self.tcx(), reborrow);
 
-        let mut selcx = traits::SelectionContext::new(panic!());
+        let mut infcx = self.fcx.infcx();
+        let cell = RefCell::new(&mut *infcx);
+        let mut selcx = traits::SelectionContext::new(&cell);
 
         // Use a FIFO queue for this custom fulfillment procedure.
         let mut queue = VecDeque::new();

@@ -1477,8 +1477,8 @@ fn is_discr_reassigned(bcx: Block, discr: &hir::Expr, body: &hir::Expr) -> bool 
         reassigned: false
     };
     {
-        let infcx = InferCtxt::normalizing(bcx.tcx(), &bcx.tcx().tables);
-        let cell = RefCell::new(infcx);
+        let mut infcx = InferCtxt::normalizing(bcx.tcx(), &bcx.tcx().tables);
+        let cell = RefCell::new(&mut infcx);
         let mut visitor = euv::ExprUseVisitor::new(&mut rc, &cell);
         visitor.walk_expr(body);
     }

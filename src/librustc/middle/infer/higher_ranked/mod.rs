@@ -14,8 +14,6 @@
 use super::{CombinedSnapshot, InferCtxt, HigherRankedType, SkolemizationMap};
 use super::combine::CombineFields;
 
-use middle::ty::{self, Binder};
-use middle::subst;
 use middle::transactional::Transactional;
 use middle::ty::error::TypeError;
 use middle::ty::fold::TypeFoldable;
@@ -226,7 +224,7 @@ impl<'infcx,'a,'tcx> HigherRankedRelations<'infcx,'a,'tcx> for CombineFields<'in
                 try!(this.glb().relate(&a_with_fresh, &b_with_fresh));
             let result0 =
                 this.infcx.borrow_mut().resolve_type_vars_if_possible(&result0);
-            
+
             debug!("glb result0 = {:?}", result0);
 
             // Generalize the regions appearing in result0 if possible

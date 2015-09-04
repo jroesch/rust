@@ -1217,9 +1217,12 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
         self.inh.infcx.borrow_mut()
     }
 
-    pub fn param_env(&self) -> &ty::ParameterEnvironment<'a,'tcx> {
-        //&self.inh.infcx.parameter_environment
-        panic!()
+    pub fn param_env(&self) -> Ref<ty::ParameterEnvironment<'a,'tcx>> {
+        Ref::map(self.inh.infcx.borrow(), |infcx| &infcx.parameter_environment)
+    }
+
+    pub fn writeback_errors(&self) -> &Cell<bool> {
+        &self.writeback_errors
     }
 
     pub fn sess(&self) -> &Session {

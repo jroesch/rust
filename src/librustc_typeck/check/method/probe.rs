@@ -56,6 +56,22 @@ struct ProbeContext<'fcx, 'a: 'fcx, 'tcx:'a> {
     unsatisfied_predicates: Vec<TraitRef<'tcx>>
 }
 
+// impl<'fcx, 'a, 'tcx> Transactional for ProbeContext<'fcx, 'a, 'tcx> {
+//     type Snapshot = infer::CombinedSnapshot;
+
+    // fn start_snapshot(&mut self) -> Self::Snapshot {
+    //    self.fcx.infcx().start_snapshot()
+    // }
+
+    // fn rollback_to(&mut self, cause: &str, snapshot: Self::Snapshot) {
+    //     self.fcx.infcx().rollback_to(cause, snapshot)
+    // }
+
+//     fn commit_from(&mut self, snapshot: Self::Snapshot) {
+//         self.fcx.infcx().commit_from(snapshot)
+//     }
+// }
+
 #[derive(Debug)]
 struct CandidateStep<'tcx> {
     self_ty: Ty<'tcx>,
@@ -1037,7 +1053,7 @@ impl<'fcx, 'a, 'tcx> ProbeContext<'fcx, 'a,'tcx> {
                self_ty,
                probe);
 
-        self.infcx().probe(|_, infcx| {
+        self.infcx().probe(|_, _| {
             // First check that the self type can be related.
             match self.make_sub_ty(self_ty, probe.xform_self_ty) {
                 Ok(()) => { }

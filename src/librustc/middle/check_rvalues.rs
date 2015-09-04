@@ -43,17 +43,21 @@ impl<'a, 'tcx, 'v> intravisit::Visitor<'v> for RvalueContext<'a, 'tcx> {
                 fn_id: ast::NodeId) {
         {
             let param_env = ParameterEnvironment::for_item(self.tcx, fn_id);
-            let infcx = RefCell::new(InferCtxt::new(
+
+            let mut infcx = InferCtxt::new(
                 self.tcx,
                 &self.tcx.tables,
                 Some(param_env.clone()));
+
+
+            let cell = RefCell::new(&mut infcx);
 
             let mut delegate = RvalueContextDelegate {
                 tcx: self.tcx,
                 param_env: &param_env
             };
 
-            let mut euv = euv::ExprUseVisitor::new(&mut delegate, &infcx);
+            let mut euv = euv::ExprUseVisitor::new(&mut delegate, &cell);
             euv.walk_fn(fd, b);
         }
         intravisit::walk_fn(self, fk, fd, b, s)
