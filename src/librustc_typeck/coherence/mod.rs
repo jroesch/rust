@@ -372,9 +372,9 @@ impl<'a, 'tcx> CoherenceChecker<'a, 'tcx> {
 
             let mut infcx = InferCtxt::new(tcx, &tcx.tables, Some(param_env));
 
-            let mut check_mutbl = |infcx: &mut InferCtxt<'a, 'tcx>,
-                                   mt_a: ty::TypeAndMut<'tcx>, mt_b: ty::TypeAndMut<'tcx>,
-                                   mk_ptr: &Fn(Ty<'tcx>) -> Ty<'tcx>| {
+            let check_mutbl = |infcx: &mut InferCtxt<'a, 'tcx>,
+                               mt_a: ty::TypeAndMut<'tcx>, mt_b: ty::TypeAndMut<'tcx>,
+                               mk_ptr: &Fn(Ty<'tcx>) -> Ty<'tcx>| {
                 if (mt_a.mutbl, mt_b.mutbl) == (hir::MutImmutable, hir::MutMutable) {
                     infcx.report_mismatched_types(span, mk_ptr(mt_b.ty),
                                                   target, &ty::error::TypeError::Mutability);

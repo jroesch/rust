@@ -100,7 +100,9 @@ use middle::ty::adjustment;
 use middle::ty::wf::ImpliedBound;
 
 use std::mem;
-use syntax::ast;
+use std::rc::Rc;
+use std::cell::{RefCell, RefMut};
+use syntax::{ast, ast_util};
 use syntax::codemap::Span;
 use rustc_front::intravisit::{self, Visitor};
 use rustc_front::hir;
@@ -679,7 +681,9 @@ fn visit_expr(rcx: &mut Rcx, expr: &hir::Expr) {
         // If necessary, constrain destructors in the unadjusted form of this
         // expression.
         let cmt_result = {
-            let mc = mc::MemCategorizationContext::new(&rcx.fcx.inh.infcx);
+            let mut infcx = rcx.fcx.inh.infcx.borrow_mut();
+            let cell = RefCell::new(&mut *infcx);
+            let mc = mc::MemCategorizationContext::new(&cell);
             mc.cat_expr_unadjusted(expr)
         };
         match cmt_result {
@@ -698,7 +702,9 @@ fn visit_expr(rcx: &mut Rcx, expr: &hir::Expr) {
     // If necessary, constrain destructors in this expression. This will be
     // the adjusted form if there is an adjustment.
     let cmt_result = {
-        let mc = mc::MemCategorizationContext::new(&rcx.fcx.inh.infcx);
+        let mut infcx = rcx.fcx.inh.infcx.borrow_mut();
+        let cell = RefCell::new(&mut *infcx);
+        let mc = mc::MemCategorizationContext::new(&cell);
         mc.cat_expr(expr)
     };
     match cmt_result {
@@ -1065,7 +1071,9 @@ fn constrain_autoderefs<'infcx, 'a, 'tcx>(rcx: &mut Rcx<'infcx, 'a, 'tcx>,
                        r, m);
 
                 {
-                    let mc = mc::MemCategorizationContext::new(&rcx.fcx.inh.infcx);
+                    let mut infcx = rcx.fcx.inh.infcx.borrow_mut();
+                    let cell = RefCell::new(&mut *infcx);
+                    let mc = mc::MemCategorizationContext::new(&cell);
                     let self_cmt = ignore_err!(mc.cat_expr_autoderefd(deref_expr, i));
                     debug!("constrain_autoderefs: self_cmt={:?}",
                            self_cmt);
@@ -1190,7 +1198,9 @@ fn link_addr_of(rcx: &mut Rcx, expr: &hir::Expr,
     debug!("link_addr_of(expr={:?}, base={:?})", expr, base);
 
     let cmt = {
-        let mc = mc::MemCategorizationContext::new(&rcx.fcx.inh.infcx);
+        let mut infcx = rcx.fcx.inh.infcx.borrow_mut();
+        let cell = RefCell::new(&mut *infcx);
+        let mc = mc::MemCategorizationContext::new(&cell);
         ignore_err!(mc.cat_expr(base))
     };
 
@@ -1208,7 +1218,10 @@ fn link_local(rcx: &Rcx, local: &hir::Local) {
         None => { return; }
         Some(ref expr) => &**expr,
     };
-    let mc = mc::MemCategorizationContext::new(&rcx.fcx.inh.infcx);
+
+    let mut infcx = rcx.fcx.inh.infcx.borrow_mut();
+    let cell = RefCell::new(&mut *infcx);
+    let mc = mc::MemCategorizationContext::new(&cell);
     let discr_cmt = ignore_err!(mc.cat_expr(init_expr));
     link_pattern(rcx, mc, discr_cmt, &*local.pat);
 }
@@ -1218,7 +1231,9 @@ fn link_local(rcx: &Rcx, local: &hir::Local) {
 /// linked to the lifetime of its guarantor (if any).
 fn link_match(rcx: &Rcx, discr: &hir::Expr, arms: &[hir::Arm]) {
     debug!("regionck::for_match()");
-    let mc = mc::MemCategorizationContext::new(&rcx.fcx.inh.infcx);
+    let mut infcx = rcx.fcx.inh.infcx.borrow_mut();
+    let cell = RefCell::new(&mut *infcx);
+    let mc = mc::MemCategorizationContext::new(&cell);
     let discr_cmt = ignore_err!(mc.cat_expr(discr));
     debug!("discr_cmt={:?}", discr_cmt);
     for arm in arms {
@@ -1233,7 +1248,9 @@ fn link_match(rcx: &Rcx, discr: &hir::Expr, arms: &[hir::Arm]) {
 /// linked to the lifetime of its guarantor (if any).
 fn link_fn_args(rcx: &Rcx, body_scope: CodeExtent, args: &[hir::Arg]) {
     debug!("regionck::link_fn_args(body_scope={:?})", body_scope);
-    let mc = mc::MemCategorizationContext::new(&rcx.fcx.inh.infcx);
+    let mut infcx = rcx.fcx.inh.infcx.borrow_mut();
+    let cell = RefCell::new(&mut *infcx);
+    let mc = mc::MemCategorizationContext::new(&cell);
     for arg in args {
         let arg_ty = rcx.fcx.node_ty(arg.id);
         let re_scope = ty::ReScope(body_scope);
@@ -1249,7 +1266,7 @@ fn link_fn_args(rcx: &Rcx, body_scope: CodeExtent, args: &[hir::Arg]) {
 /// Link lifetimes of any ref bindings in `root_pat` to the pointers found in the discriminant, if
 /// needed.
 fn link_pattern<'infcx, 't, 'a, 'tcx>(rcx: &Rcx<'infcx, 'a, 'tcx>,
-                                      mc: mc::MemCategorizationContext<'t, 'a, 'tcx>,
+                                      mc: mc::MemCategorizationContext<'t, 'infcx, 'a, 'tcx>,
                                       discr_cmt: mc::cmt<'tcx>,
                                       root_pat: &hir::Pat) {
     debug!("link_pattern(discr_cmt={:?}, root_pat={:?})",
@@ -1288,7 +1305,9 @@ fn link_autoref(rcx: &Rcx,
                 autoref: &adjustment::AutoRef)
 {
     debug!("link_autoref(autoref={:?})", autoref);
-    let mc = mc::MemCategorizationContext::new(&rcx.fcx.inh.infcx);
+    let mut infcx = rcx.fcx.inh.infcx.borrow_mut();
+    let cell = RefCell::new(&mut *infcx);
+    let mc = mc::MemCategorizationContext::new(&cell);
     let expr_cmt = ignore_err!(mc.cat_expr_autoderefd(expr, autoderefs));
     debug!("expr_cmt={:?}", expr_cmt);
 
@@ -1312,7 +1331,9 @@ fn link_by_ref(rcx: &Rcx,
                callee_scope: CodeExtent) {
     debug!("link_by_ref(expr={:?}, callee_scope={:?})",
            expr, callee_scope);
-    let mc = mc::MemCategorizationContext::new(&rcx.fcx.inh.infcx);
+    let mut infcx = rcx.fcx.inh.infcx.borrow_mut();
+    let cell = RefCell::new(&mut *infcx);
+    let mc = mc::MemCategorizationContext::new(&cell);
     let expr_cmt = ignore_err!(mc.cat_expr(expr));
     let borrow_region = ty::ReScope(callee_scope);
     link_region(rcx, expr.span, &borrow_region, ty::ImmBorrow, expr_cmt);
@@ -1754,12 +1775,13 @@ fn type_bound<'infcx, 'a, 'tcx>(rcx: &Rcx<'infcx, 'a, 'tcx>, span: Span, ty: Ty<
 }
 
 fn param_bound<'infcx, 'a, 'tcx>(rcx: &Rcx<'infcx, 'a, 'tcx>, param_ty: ty::ParamTy) -> VerifyBound {
-    let param_env = &rcx.infcx().parameter_environment;
 
     debug!("param_bound(param_ty={:?})",
            param_ty);
 
     let mut param_bounds = declared_generic_bounds_from_env(rcx, GenericKind::Param(param_ty));
+
+    let param_env = &rcx.infcx().parameter_environment;
 
     // Add in the default bound of fn body that applies to all in
     // scope type parameters:

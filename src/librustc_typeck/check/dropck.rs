@@ -13,7 +13,6 @@ use check::regionck::{self, Rcx};
 use middle::def_id::DefId;
 use middle::infer::{self, InferCtxt};
 use middle::free_region::FreeRegionMap;
-use middle::transactional::Transactional;
 use middle::region;
 use middle::subst::{self, Subst};
 use middle::traits;

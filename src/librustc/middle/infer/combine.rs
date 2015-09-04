@@ -69,7 +69,7 @@ pub fn super_combine_tys<'infcx,'a:'infcx,'tcx:'a,R>(relation: &mut R,
                                        a: Ty<'tcx>,
                                        b: Ty<'tcx>)
                                        -> RelateResult<'tcx, Ty<'tcx>>
-    where R: TypeRelation<'infcx,'a,'tcx> 
+    where R: TypeRelation<'infcx,'a,'tcx>
 {
     let a_is_expected = relation.a_is_expected();
 
@@ -242,8 +242,17 @@ impl<'infcx, 'a, 'tcx> CombineFields<'infcx, 'a, 'tcx> {
             // Check whether `vid` has been instantiated yet.  If not,
             // make a generalized form of `ty` and instantiate with
             // that.
-            let infcx = self.infcx.borrow_mut();
-            let b_ty = infcx.type_variables.borrow().probe(b_vid);
+            let b_ty = {
+                let infcx = self.infcx.borrow();
+
+                // this seems like some borrow checking dumb-ness
+                // if we don't bind this result it fails to compile
+                // but if we do its A-OK
+                let res = infcx.type_variables
+                    .borrow().probe(b_vid);
+                res
+            };
+
             let b_ty = match b_ty {
                 Some(t) => t, // ...already instantiated.
                 None => {     // ...not yet instantiated:
@@ -256,10 +265,15 @@ impl<'infcx, 'a, 'tcx> CombineFields<'infcx, 'a, 'tcx> {
                                         b_vid={:?}, generalized_ty={:?})",
                            a_ty, dir, b_vid,
                            generalized_ty);
-                    infcx.type_variables
+                    {
+                        let infcx = self.infcx.borrow();
+
+                        infcx
+                        .type_variables
                         .borrow_mut()
                         .instantiate_and_push(
                             b_vid, generalized_ty, &mut stack);
+                    }
                     generalized_ty
                 }
             };

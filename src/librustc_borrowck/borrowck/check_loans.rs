@@ -202,7 +202,7 @@ pub fn check_loans<'a, 'b, 'c, 'tcx>(bccx: &BorrowckCtxt<'a, 'tcx>,
     debug!("check_loans(body id={})", body.id);
 
     let param_env = ty::ParameterEnvironment::for_item(bccx.tcx, fn_id);
-    let infcx = InferCtxt::new(bccx.tcx, &bccx.tcx.tables, Some(param_env.clone()));
+    let mut infcx = InferCtxt::new(bccx.tcx, &bccx.tcx.tables, Some(param_env.clone()));
 
     let mut clcx = CheckLoanCtxt {
         bccx: bccx,
@@ -213,7 +213,7 @@ pub fn check_loans<'a, 'b, 'c, 'tcx>(bccx: &BorrowckCtxt<'a, 'tcx>,
     };
 
     {
-        let cell = RefCell::new(infcx);
+        let cell = RefCell::new(&mut infcx);
         let mut euv = euv::ExprUseVisitor::new(&mut clcx, &cell);
         euv.walk_fn(decl, body);
     }
