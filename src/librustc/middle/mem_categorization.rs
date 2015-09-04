@@ -84,7 +84,7 @@ use rustc_front::hir;
 use syntax::ast;
 use syntax::codemap::Span;
 
-use std::cell::{RefCell, Ref};
+use std::cell::{RefCell};
 use std::fmt;
 use std::rc::Rc;
 
@@ -257,8 +257,8 @@ impl ast_node for hir::Pat {
 }
 
 #[derive(Copy, Clone)]
-pub struct MemCategorizationContext<'t, 'a: 't, 'tcx : 'a> {
-    pub typer: &'t RefCell<infer::InferCtxt<'a, 'tcx>>,
+pub struct MemCategorizationContext<'cell, 'infcx: 'cell, 'cx: 'infcx, 'tcx : 'cx> {
+    pub typer: &'cell RefCell<&'infcx mut infer::InferCtxt<'cx , 'tcx>>,
 }
 
 pub type McResult<T> = Result<T, ()>;
@@ -359,13 +359,13 @@ impl MutabilityCategory {
     }
 }
 
-impl<'t, 'a,'tcx> MemCategorizationContext<'t, 'a, 'tcx> {
-    pub fn new(infcx: &'t RefCell<infer::InferCtxt<'a, 'tcx>>) -> MemCategorizationContext<'t, 'a, 'tcx> {
+impl<'cell, 'infcx, 'cx, 'tcx> MemCategorizationContext<'cell, 'infcx, 'cx, 'tcx> {
+    pub fn new(infcx: &'cell RefCell<&'infcx mut infer::InferCtxt<'cx, 'tcx>>) -> MemCategorizationContext<'cell, 'infcx, 'cx, 'tcx> {
         MemCategorizationContext { typer: infcx }
     }
 
-    fn tcx(&self) -> Ref<ty::ctxt<'tcx>> {
-        panic!() // self.typer.tcx
+    fn tcx(&self) -> &'cx ty::ctxt<'tcx> {
+        self.typer.borrow().tcx
     }
 
     fn expr_ty(&self, expr: &hir::Expr) -> McResult<Ty<'tcx>> {
@@ -381,13 +381,22 @@ impl<'t, 'a,'tcx> MemCategorizationContext<'t, 'a, 'tcx> {
 
     fn expr_ty_adjusted(&self, expr: &hir::Expr) -> McResult<Ty<'tcx>> {
         let unadjusted_ty = try!(self.expr_ty(expr));
-        let mut infcx = self.typer.borrow_mut();
-        // let adjustment = infcx.adjustments().get(&expr.id).clone();
+
+        let adjustment = {
+            let infcx = self.typer.borrow();
+            // This is another bizarre pattern ...
+            // not sure why this needs to happen
+            let ret = infcx.adjustments()
+                .get(&expr.id)
+                .map(|v| v.clone());
+            ret
+        };
+
         Ok(unadjusted_ty.adjust(
             &*self.tcx(), expr.span, expr.id,
-            panic!(), // adjustment,
+            adjustment.as_ref(),
             |method_call| {
-                // let mut infcx = self.typer.borrow_mut();
+                let mut infcx = self.typer.borrow_mut();
                 infcx.node_method_ty(method_call)
            }))
     }
@@ -423,7 +432,7 @@ impl<'t, 'a,'tcx> MemCategorizationContext<'t, 'a, 'tcx> {
 
     pub fn cat_expr(&self, expr: &hir::Expr) -> McResult<cmt<'tcx>> {
         // extra clone here, not sure about the lifetime issue
-        let mut infcx = self.typer.borrow_mut();
+        let infcx = self.typer.borrow_mut();
         let adjustment = infcx.adjustments().get(&expr.id).map(|x| x.clone());
 
         match adjustment {
@@ -1155,8 +1164,8 @@ impl<'t, 'a,'tcx> MemCategorizationContext<'t, 'a, 'tcx> {
         ret
     }
 
-    pub fn cat_pattern<F>(&self, cmt: cmt<'tcx>, pat: &hir::Pat, mut op: F) -> McResult<()>
-        where F: FnMut(&MemCategorizationContext<'t, 'a, 'tcx>, cmt<'tcx>, &hir::Pat),
+    pub fn cat_pattern<F>(&self, cmt: cmt<'tcx>, pat: &ast::Pat, mut op: F) -> McResult<()>
+        where F: FnMut(&MemCategorizationContext<'cell, 'infcx, 'cx, 'tcx>, cmt<'tcx>, &hir::Pat),
     {
         self.cat_pattern_(cmt, pat, &mut op)
     }
@@ -1164,7 +1173,7 @@ impl<'t, 'a,'tcx> MemCategorizationContext<'t, 'a, 'tcx> {
     // FIXME(#19596) This is a workaround, but there should be a better way to do this
     fn cat_pattern_<F>(&self, cmt: cmt<'tcx>, pat: &hir::Pat, op: &mut F)
                        -> McResult<()>
-        where F : FnMut(&MemCategorizationContext<'t, 'a, 'tcx>, cmt<'tcx>, &hir::Pat),
+        where F : FnMut(&MemCategorizationContext<'cell, 'infcx, 'cx, 'tcx>, cmt<'tcx>, &hir::Pat),
     {
         // Here, `cmt` is the categorization for the value being
         // matched and pat is the pattern it is being matched against.

@@ -23,7 +23,6 @@ use middle::ty::fold::TypeFoldable;
 use middle::infer::{self, fixup_err_to_string, InferCtxt};
 
 use std::rc::Rc;
-use std::cell::RefCell;
 use syntax::ast;
 use syntax::codemap::{Span, DUMMY_SP};
 use middle::transactional::Transactional;

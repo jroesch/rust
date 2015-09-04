@@ -1606,14 +1606,9 @@ impl<'a, 'tcx> InferCtxt<'a, 'tcx> {
             .get(&method_call)
             .map(|method| method.def_id)
     }
+    pub fn adjustments(&self) -> Ref<NodeMap<ty::AutoAdjustment<'tcx>>> {
 
-    pub fn adjustments(&self) -> Ref<NodeMap<adjustment::AutoAdjustment<'tcx>>> {
-        fn project_adjustments<'a, 'tcx>(tables: &'a ty::Tables<'tcx>)
-                                        -> &'a NodeMap<adjustment::AutoAdjustment<'tcx>> {
-            &tables.adjustments
-        }
-
-        Ref::map(self.tables.borrow(), project_adjustments)
+        Ref::map(self.tables.borrow(), |tables| &tables.adjustments)
     }
 
     pub fn is_method_call(&self, id: ast::NodeId) -> bool {
@@ -2223,7 +2218,7 @@ impl<'tcx> SnapshotVecDelegate for PredicateObligation<'tcx> {
     type Value = Self;
     type Undo = ();
 
-    fn reverse(values: &mut Vec<PredicateObligation<'tcx>>, _action: ()) {
+    fn reverse(_values: &mut Vec<PredicateObligation<'tcx>>, _action: ()) {
         ()
     }
 }
@@ -2232,7 +2227,7 @@ impl<'tcx> SnapshotVecDelegate for RegionObligation<'tcx> {
     type Value = Self;
     type Undo = ();
 
-    fn reverse(values: &mut Vec<RegionObligation<'tcx>>, _action: ()) {
+    fn reverse(_values: &mut Vec<RegionObligation<'tcx>>, _action: ()) {
         ()
     }
 }
@@ -2274,11 +2269,6 @@ pub struct RegionObligation<'tcx> {
     pub sub_region: ty::Region,
     pub sup_type: Ty<'tcx>,
     pub cause: ObligationCause<'tcx>,
-}
-
-pub struct FulfillmentSnapshot {
-    predicates_snapshot: Snapshot,
-    region_obligations_snapshot: NodeMap<Snapshot>
 }
 
 impl<'tcx> fmt::Debug for RegionObligation<'tcx> {

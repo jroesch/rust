@@ -33,11 +33,12 @@
 extern crate serialize as rustc_serialize; // used by deriving
 extern crate core;
 
+pub mod bitvec;
+// pub mod debug_cell;
+pub mod graph;
+pub mod ivar;
 pub mod snapshot_vec;
 pub mod snapshot_tree;
-pub mod graph;
-pub mod bitvec;
-pub mod ivar;
 pub mod transitive_relation;
 pub mod unify;
 pub mod fnv;

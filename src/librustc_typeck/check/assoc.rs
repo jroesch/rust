@@ -9,14 +9,12 @@
 // except according to those terms.
 
 use middle::infer::InferCtxt;
-use middle::transactional::Transactional;
 use middle::traits::{self, Normalized, MiscObligation,
                      SelectionContext, ObligationCause};
 use middle::ty::HasTypeFlags;
 use middle::ty::fold::TypeFoldable;
 use syntax::ast;
 use syntax::codemap::Span;
-use std::cell::RefCell;
 
 pub fn normalize_associated_types_in<'a,'tcx,T>(infcx: &mut InferCtxt<'a,'tcx>,
                                                 span: Span,
