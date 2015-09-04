@@ -368,7 +368,9 @@ impl<'a, 'cx, 'tcx> WritebackCx<'a, 'cx, 'tcx> {
     }
 
     fn resolve<T:TypeFoldable<'tcx>>(&self, t: &T, reason: ResolveReason) -> T {
-        t.fold_with(&mut Resolver::new(self.fcx, reason))
+        let infcx = &mut self.fcx.infcx();
+        let mut resolver = Resolver::from_infcx(infcx, self.fcx.writeback_errors(), reason);
+        t.fold_with(&mut resolver)
     }
 }
 
@@ -415,21 +417,22 @@ impl ResolveReason {
 struct Resolver<'a, 'cx: 'a, 'tcx: 'cx> {
     tcx: &'cx ty::ctxt<'tcx>,
     infcx: &'a mut infer::InferCtxt<'cx, 'tcx>,
-    writeback_errors: &'cx Cell<bool>,
+    writeback_errors: &'a Cell<bool>,
     reason: ResolveReason,
 }
 
 impl<'a, 'cx, 'tcx> Resolver<'a, 'cx, 'tcx> {
-    fn new(fcx: &'a FnCtxt<'cx, 'tcx>,
-           reason: ResolveReason)
-           -> Resolver<'a, 'cx, 'tcx>
-    {
-        //Resolver::from_infcx(&mut fcx.infcx(), &fcx.writeback_errors, reason)
-        panic!()
-    }
+// This no longer works because of RefCells, might be worth bringing back,
+// if we can pass the InferCtxt down without needing to do dynamic borrow.
+//     fn new(fcx: &'a FnCtxt<'cx, 'tcx>,
+//            reason: ResolveReason)
+//            -> Resolver<'a, 'cx, 'tcx>
+//     {
+//         Resolver::from_infcx(&mut fcx.infcx(), &fcx.writeback_errors, reason)
+//     }
 
     fn from_infcx(infcx: &'a mut infer::InferCtxt<'cx, 'tcx>,
-                  writeback_errors: &'cx Cell<bool>,
+                  writeback_errors: &'a Cell<bool>,
                   reason: ResolveReason)
                   -> Resolver<'a, 'cx, 'tcx>
     {

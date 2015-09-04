@@ -245,22 +245,24 @@ pub fn compare_impl_method<'tcx>(tcx: &ty::ctxt<'tcx>,
     debug!("compare_impl_method: trait_bounds={:?}",
         infcx.parameter_environment.caller_bounds);
 
-    let cell = panic!();
-    let mut selcx = traits::SelectionContext::new(&cell);
+    let impl_pred_fns = impl_pred.fns;
 
-    for predicate in impl_pred.fns {
-        let traits::Normalized { value: predicate, .. } =
-            traits::normalize(&mut selcx, normalize_cause.clone(), &predicate);
+    traits::SelectionContext::scoped(&mut infcx, |mut selcx| {
 
-        let cause = traits::ObligationCause {
-            span: impl_m_span,
-            body_id: impl_m_body_id,
-            code: traits::ObligationCauseCode::CompareImplMethodObligation
-        };
+        for predicate in impl_pred_fns {
+            let traits::Normalized { value: predicate, .. } =
+                traits::normalize(&mut selcx, normalize_cause.clone(), &predicate);
 
-        infcx.register_predicate_obligation(
-            traits::Obligation::new(cause, predicate));
-    }
+            let cause = traits::ObligationCause {
+                span: impl_m_span,
+                body_id: impl_m_body_id,
+                code: traits::ObligationCauseCode::CompareImplMethodObligation
+            };
+
+            selcx.infcx().register_predicate_obligation(
+                traits::Obligation::new(cause, predicate));
+        }
+    });
 
     // We now need to check that the signature of the impl method is
     // compatible with that of the trait method. We do this by
