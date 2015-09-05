@@ -432,8 +432,11 @@ impl<'cell, 'infcx, 'cx, 'tcx> MemCategorizationContext<'cell, 'infcx, 'cx, 'tcx
 
     pub fn cat_expr(&self, expr: &hir::Expr) -> McResult<cmt<'tcx>> {
         // extra clone here, not sure about the lifetime issue
-        let infcx = self.typer.borrow_mut();
-        let adjustment = infcx.adjustments().get(&expr.id).map(|x| x.clone());
+        let adjustment = {
+            let infcx = self.typer.borrow_mut();
+            let adjustment = infcx.adjustments().get(&expr.id).map(|x| x.clone());
+            adjustment
+        };
 
         match adjustment {
             None => {
