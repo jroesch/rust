@@ -41,7 +41,7 @@ use middle::subst::{Subst, Substs, TypeSpace};
 use middle::ty::{self, ToPredicate, RegionEscape, ToPolyTraitRef, Ty, HasTypeFlags};
 use middle::infer;
 use middle::infer::{InferCtxt, TypeFreshener, TypeOrigin};
-use middle::transactional::Transactional;
+use middle::transactional::TransactionalMut;
 use middle::subst::{Subst, Substs, TypeSpace};
 use middle::ty::{self, ToPredicate, RegionEscape, ToPolyTraitRef, Ty, HasTypeFlags};
 use middle::ty::fast_reject;
@@ -3018,10 +3018,11 @@ impl<'cell, 'infcx, 'cx, 'tcx> SelectionContext<'cell, 'infcx, 'cx, 'tcx> {
     }
 }
 
-impl<'cell, 'infcx, 'cx, 'tcx> Transactional for SelectionContext<'cell, 'infcx, 'cx, 'tcx> {
+impl<'cell, 'infcx, 'cx, 'tcx> TransactionalMut for SelectionContext<'cell, 'infcx, 'cx, 'tcx> {
     type Snapshot = infer::CombinedSnapshot;
 
     fn start_snapshot(&mut self) -> infer::CombinedSnapshot {
+
         self.infcx().start_snapshot()
     }
 

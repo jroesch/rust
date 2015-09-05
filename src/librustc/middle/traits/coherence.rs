@@ -21,7 +21,7 @@ use middle::cstore::LOCAL_CRATE;
 use middle::def_id::DefId;
 use middle::subst::{Subst, Substs, TypeSpace};
 use middle::ty::{self, Ty};
-use middle::transactional::Transactional;
+use middle::transactional::TransactionalMut;
 use middle::ty::{self, ToPolyTraitRef, Ty};
 use middle::infer::{self, InferCtxt, TypeOrigin};
 use syntax::codemap::{DUMMY_SP, Span};

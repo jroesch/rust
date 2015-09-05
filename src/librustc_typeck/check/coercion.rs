@@ -65,7 +65,7 @@ use check::{autoderef, FnCtxt, UnresolvedTypeAction};
 use middle::infer::{self, Coercion, TypeOrigin};
 use middle::traits::{self, ObligationCause};
 use middle::traits::{predicate_for_trait_def, report_selection_error};
-use middle::transactional::Transactional;
+use middle::transactional::{Transactional, TransactionalMut};
 use middle::ty::adjustment::{AutoAdjustment, AutoDerefRef, AdjustDerefRef};
 use middle::ty::adjustment::{AutoPtr, AutoUnsafe, AdjustReifyFnPointer};
 use middle::ty::adjustment::{AdjustUnsafeFnPointer};
@@ -99,7 +99,8 @@ impl<'fcx, 'f, 'tcx> Coerce<'fcx, 'f, 'tcx> {
     fn unpack_actual_value<T, F>(&self, a: Ty<'tcx>, f: F) -> T where
         F: FnOnce(Ty<'tcx>) -> T,
     {
-        f(self.fcx.infcx().shallow_resolve(a))
+        let ty = self.fcx.infcx().shallow_resolve(a);
+        f(ty)
     }
 
     fn coerce(&self,
@@ -436,6 +437,22 @@ impl<'fcx, 'f, 'tcx> Coerce<'fcx, 'f, 'tcx> {
     }
 }
 
+// This doesn't quite fit into the transactional interface because we need to do
+// it on immutable references.
+pub fn commit_if_ok<'a, 'tcx, T, E, F>(fcx: &FnCtxt<'a, 'tcx>, f: F) -> Result<T, E> where
+    F: FnOnce(&infer::CombinedSnapshot, &FnCtxt<'a, 'tcx>) -> Result<T, E>
+{
+    debug!("commit_if_ok()");
+    let snapshot = fcx.infcx().start_snapshot();
+    let r = f(&snapshot, fcx);
+    debug!("commit_if_ok() -- r.is_ok() = {}", r.is_ok());
+    match r {
+        Ok(_) => { fcx.infcx().commit_from(snapshot); }
+        Err(_) => { fcx.infcx().rollback_to("Transactional::commit_if_ok", snapshot); }
+    }
+    r
+}
+
 pub fn mk_assignty<'a, 'tcx>(fcx: &FnCtxt<'a, 'tcx>,
                              expr: &hir::Expr,
                              a: Ty<'tcx>,
@@ -444,7 +461,7 @@ pub fn mk_assignty<'a, 'tcx>(fcx: &FnCtxt<'a, 'tcx>,
     debug!("mk_assignty({:?} -> {:?})", a, b);
     let mut unsizing_obligations = vec![];
     let adjustment = try!(indent(|| {
-        fcx.infcx().commit_if_ok(|_, _| {
+        commit_if_ok(fcx, |_, fcx| {
             let coerce = Coerce {
                 fcx: fcx,
                 origin: TypeOrigin::ExprAssignable(expr.span),

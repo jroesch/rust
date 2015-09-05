@@ -93,8 +93,8 @@ use middle::pat_util::{self, pat_id_map};
 use middle::privacy::{AllPublic, LastMod};
 use middle::subst::{self, Subst, Substs, VecPerParamSpace, ParamSpace, TypeSpace};
 use middle::traits::{self, report_fulfillment_errors};
-use middle::transactional::Transactional;
-use middle::ty::{GenericPredicates, TypeScheme};
+use middle::transactional::{Transactional, TransactionalMut};
+use middle::ty::{FnSig, GenericPredicates, TypeScheme};
 use middle::ty::{Disr, ParamTy, ParameterEnvironment};
 use middle::ty::{LvaluePreference, NoPreference, PreferMutLvalue};
 use middle::ty::{self, HasTypeFlags, RegionEscape, ToPolyTraitRef, Ty};
@@ -303,15 +303,15 @@ pub struct FnCtxt<'a, 'tcx: 'a> {
 impl<'a, 'tcx> Transactional for FnCtxt<'a, 'tcx> {
     type Snapshot = infer::CombinedSnapshot;
 
-    fn start_snapshot(&mut self) -> CombinedSnapshot {
+    fn start_snapshot(&self) -> CombinedSnapshot {
         self.inh.infcx.borrow_mut().start_snapshot()
     }
 
-    fn rollback_to(&mut self, cause: &str, snapshot: CombinedSnapshot) {
+    fn rollback_to(&self, cause: &str, snapshot: CombinedSnapshot) {
         self.inh.infcx.borrow_mut().rollback_to(cause, snapshot)
     }
 
-    fn commit_from(&mut self, snapshot: CombinedSnapshot) {
+    fn commit_from(&self, snapshot: CombinedSnapshot) {
         self.inh.infcx.borrow_mut().commit_from(snapshot);
     }
 }
@@ -1765,10 +1765,13 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
         use middle::ty::error::UnconstrainedNumeric::{UnconstrainedInt, UnconstrainedFloat};
         for ty in &self.infcx().unsolved_variables() {
             let resolved = self.infcx().resolve_type_vars_if_possible(ty);
-            if self.infcx().type_var_diverges(resolved) {
+            let diverges = self.infcx().type_var_diverges(resolved);
+            if diverges {
                 demand::eqtype(self, codemap::DUMMY_SP, *ty, self.tcx().mk_nil());
             } else {
-                match self.infcx().type_is_unconstrained_numeric(resolved) {
+                let unconstrained =
+                    self.infcx().type_is_unconstrained_numeric(resolved);
+                match unconstrained {
                     UnconstrainedInt => {
                         demand::eqtype(self, codemap::DUMMY_SP, *ty, self.tcx().types.i32)
                     },
