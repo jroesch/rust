@@ -95,8 +95,8 @@ pub fn report_error<'a, 'tcx>(fcx: &FnCtxt<'a, 'tcx>,
                     // Determine if the field can be used as a function in some way
                     let field_ty = field.ty(cx, substs);
                     if let Ok(fn_once_trait_did) = cx.lang_items.require(FnOnceTraitLangItem) {
-                        fcx.infcx().probe(|_, infcx| {
-                            let fn_once_substs = Substs::new_trait(vec![infcx.next_ty_var()],
+                        fcx.probe(|_, fcx| {
+                            let fn_once_substs = Substs::new_trait(vec![fcx.infcx().next_ty_var()],
                                                                    Vec::new(),
                                                                    field_ty);
                             let trait_ref = ty::TraitRef::new(fn_once_trait_did,
@@ -105,7 +105,8 @@ pub fn report_error<'a, 'tcx>(fcx: &FnCtxt<'a, 'tcx>,
                             let obligation = Obligation::misc(span,
                                                               fcx.body_id,
                                                               poly_trait_ref.to_predicate());
-                            let cell = RefCell::new(infcx);
+                            let mut infcx = fcx.infcx();
+                            let cell = RefCell::new(&mut *infcx);
                             let mut selcx = SelectionContext::new(&cell);
 
                     match field_ty.sty {

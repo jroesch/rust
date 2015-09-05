@@ -34,8 +34,8 @@ use middle::traits::{self, CodeAmbiguity, CodeSelectionError, CodeProjectionErro
 use middle::ty::adjustment;
 use middle::traits::project;
 use middle::traits::util::{predicate_for_builtin_bound};
-use middle::transactional::Transactional;
-use middle::ty::{TyVid, IntVid, FloatVid};
+use middle::transactional::TransactionalMut;
+use middle::ty::{TyVid, IntVid, FloatVid, RegionVid};
 use middle::ty::{self, Ty, HasTypeFlags};
 use middle::ty::error::{ExpectedFound, TypeError, UnconstrainedNumeric};
 use middle::ty::fold::{TypeFolder, TypeFoldable};
@@ -1704,8 +1704,8 @@ impl<'a, 'tcx> InferCtxt<'a, 'tcx> {
     /// Attempts to select obligations using `selcx`. If `only_new_obligations` is true, then it
     /// only attempts to select obligations that haven't been seen before.
     pub fn select<'cell, 'infcx>(selcx: &mut SelectionContext<'cell, 'infcx, 'a, 'tcx>,
-                      only_new_obligations: bool)
-                  -> Result<(),Vec<FulfillmentError<'tcx>>> {
+                                 only_new_obligations: bool)
+                                 -> Result<(),Vec<FulfillmentError<'tcx>>> {
 
         debug!("select({} obligations, only_new_obligations={}) start",
             selcx.infcx().predicates.len(),
@@ -1917,7 +1917,13 @@ fn process_predicate<'cell, 'infcx, 'cx, 'tcx>(selcx: &mut SelectionContext<'cel
      * type inference.
      */
     // Remove clones, trying to get this to compile.
-    let obligation = selcx.infcx().predicates.get(obligation_id).obligation.clone();
+    let predicate = selcx.infcx().predicates.get(obligation_id).clone();
+
+    if predicate.is_complete() {
+        return true;
+    }
+
+    let obligation = predicate.obligation;
 
     let is_complete = match obligation.predicate {
         ty::Predicate::Trait(ref data) => {
@@ -2253,8 +2259,9 @@ impl<'tcx> FulfilledPredicates<'tcx> {
     }
 }
 
-impl<'a, 'tcx> Transactional for InferCtxt<'a, 'tcx> {
+impl<'a, 'tcx> TransactionalMut for InferCtxt<'a, 'tcx> {
     type Snapshot = CombinedSnapshot;
+
 
     fn start_snapshot(&mut self) -> CombinedSnapshot {
         CombinedSnapshot {

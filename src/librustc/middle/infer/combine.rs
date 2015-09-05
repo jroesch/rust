@@ -41,7 +41,7 @@ use super::{InferCtxt, CombinedSnapshot};
 use super::{MiscVariable, TypeTrace};
 use super::type_variable::{RelationDir, BiTo, EqTo, SubtypeOf, SupertypeOf};
 
-use middle::transactional::Transactional;
+use middle::transactional::TransactionalMut;
 use middle::ty::{TyVar};
 use middle::ty::{IntType, UintType};
 use middle::ty::{self, Ty};
@@ -432,7 +432,7 @@ fn float_unification_error<'tcx>(a_is_expected: bool,
     TypeError::FloatMismatch(ty::relate::expected_found_bool(a_is_expected, &a, &b))
 }
 
-impl<'infcx, 'a, 'tcx> Transactional for CombineFields<'infcx, 'a, 'tcx> {
+impl<'infcx, 'a, 'tcx> TransactionalMut for CombineFields<'infcx, 'a, 'tcx> {
     type Snapshot = CombinedSnapshot;
 
     fn start_snapshot(&mut self) -> CombinedSnapshot {

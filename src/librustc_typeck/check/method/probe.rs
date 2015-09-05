@@ -19,7 +19,7 @@ use middle::def_id::DefId;
 use middle::subst;
 use middle::subst::Subst;
 use middle::traits;
-use middle::transactional::Transactional;
+use middle::transactional::{Transactional, TransactionalMut};
 use middle::ty::{self, NoPreference, RegionEscape, Ty, ToPolyTraitRef, TraitRef};
 use middle::ty::HasTypeFlags;
 use middle::ty::fold::TypeFoldable;
@@ -56,21 +56,21 @@ struct ProbeContext<'fcx, 'a: 'fcx, 'tcx:'a> {
     unsatisfied_predicates: Vec<TraitRef<'tcx>>
 }
 
-// impl<'fcx, 'a, 'tcx> Transactional for ProbeContext<'fcx, 'a, 'tcx> {
-//     type Snapshot = infer::CombinedSnapshot;
+impl<'fcx, 'a, 'tcx> Transactional for ProbeContext<'fcx, 'a, 'tcx> {
+    type Snapshot = infer::CombinedSnapshot;
 
-    // fn start_snapshot(&mut self) -> Self::Snapshot {
-    //    self.fcx.infcx().start_snapshot()
-    // }
+    fn start_snapshot(&self) -> Self::Snapshot {
+       self.fcx.infcx().start_snapshot()
+    }
 
-    // fn rollback_to(&mut self, cause: &str, snapshot: Self::Snapshot) {
-    //     self.fcx.infcx().rollback_to(cause, snapshot)
-    // }
+    fn rollback_to(&self, cause: &str, snapshot: Self::Snapshot) {
+        self.fcx.infcx().rollback_to(cause, snapshot)
+    }
 
-//     fn commit_from(&mut self, snapshot: Self::Snapshot) {
-//         self.fcx.infcx().commit_from(snapshot)
-//     }
-// }
+    fn commit_from(&self, snapshot: Self::Snapshot) {
+        self.fcx.infcx().commit_from(snapshot)
+    }
+}
 
 #[derive(Debug)]
 struct CandidateStep<'tcx> {
@@ -198,7 +198,7 @@ pub fn probe<'a, 'tcx>(fcx: &FnCtxt<'a, 'tcx>,
 
     // this creates one big transaction so that all type variables etc
     // that we create during the probe process are removed later
-    fcx.infcx().probe(|_, _| {
+    fcx.probe(|_, fcx| {
         let mut probe_cx = ProbeContext::new(fcx,
                                              span,
                                              mode,
@@ -1053,9 +1053,9 @@ impl<'fcx, 'a, 'tcx> ProbeContext<'fcx, 'a,'tcx> {
                self_ty,
                probe);
 
-        self.infcx().probe(|_, _| {
+        self.probe(|_, this| {
             // First check that the self type can be related.
-            match self.make_sub_ty(self_ty, probe.xform_self_ty) {
+            match this.make_sub_ty(self_ty, probe.xform_self_ty) {
                 Ok(()) => { }
                 Err(_) => {
                     debug!("--> cannot relate self-types");
@@ -1084,12 +1084,12 @@ impl<'fcx, 'a, 'tcx> ProbeContext<'fcx, 'a,'tcx> {
                 }
             };
 
-            let cause = traits::ObligationCause::misc(self.span, self.fcx.body_id);
+            let cause = traits::ObligationCause::misc(this.span, this.fcx.body_id);
 
             // Check whether the impl imposes obligations we have to worry about.
             let impl_bounds = self.tcx().lookup_predicates(impl_def_id);
-            let impl_bounds = impl_bounds.instantiate(self.tcx(), substs);
-            traits::SelectionContext::scoped(&mut self.infcx(), |mut selcx| {
+            let impl_bounds = impl_bounds.instantiate(this.tcx(), substs);
+            traits::SelectionContext::scoped(&mut this.infcx(), |mut selcx| {
 
                 let traits::Normalized { value: impl_bounds,
                                          obligations: norm_obligations } =
