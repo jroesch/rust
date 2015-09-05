@@ -23,7 +23,7 @@ use super::util;
 
 use middle::infer::{self, TypeOrigin};
 use middle::subst::Subst;
-use middle::transactional::Transactional;
+use middle::transactional::TransactionalMut;
 use middle::ty::{self, ToPredicate, RegionEscape, HasTypeFlags, ToPolyTraitRef, Ty};
 use middle::ty::fold::{TypeFoldable, TypeFolder};
 use syntax::parse::token;

@@ -92,8 +92,8 @@ use middle::mem_categorization::Categorization;
 use middle::region::{self, CodeExtent};
 use middle::subst::Substs;
 use middle::traits;
-use middle::transactional::Transactional;
-use middle::ty::{self, RegionEscape, Ty, MethodCall, HasTypeFlags};
+use middle::transactional::{Transactional, TransactionalMut};
+use middle::ty::{self, RegionEscape, ReScope, Ty, MethodCall, HasTypeFlags};
 use middle::infer::{self, GenericKind, InferCtxt, SubregionOrigin, TypeOrigin, VerifyBound};
 use middle::pat_util;
 use middle::ty::adjustment;
@@ -1305,10 +1305,15 @@ fn link_autoref(rcx: &Rcx,
                 autoref: &adjustment::AutoRef)
 {
     debug!("link_autoref(autoref={:?})", autoref);
-    let mut infcx = rcx.fcx.inh.infcx.borrow_mut();
-    let cell = RefCell::new(&mut *infcx);
-    let mc = mc::MemCategorizationContext::new(&cell);
-    let expr_cmt = ignore_err!(mc.cat_expr_autoderefd(expr, autoderefs));
+
+    let expr_cmt = {
+        let mut infcx = rcx.fcx.inh.infcx.borrow_mut();
+        let cell = RefCell::new(&mut *infcx);
+        let mc = mc::MemCategorizationContext::new(&cell);
+        let result = ignore_err!(mc.cat_expr_autoderefd(expr, autoderefs));
+        result
+    };
+
     debug!("expr_cmt={:?}", expr_cmt);
 
     match *autoref {

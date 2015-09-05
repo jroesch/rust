@@ -11,7 +11,7 @@
 use middle::free_region::FreeRegionMap;
 use middle::infer::{self, TypeOrigin, InferCtxt};
 use middle::traits;
-use middle::transactional::Transactional;
+use middle::transactional::{Transactional, TransactionalMut};
 use middle::ty::{self};
 use middle::subst::{self, Subst, Substs, VecPerParamSpace};
 
