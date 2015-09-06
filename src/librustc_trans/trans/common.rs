@@ -22,7 +22,6 @@ use middle::cfg;
 use middle::def;
 use middle::def_id::DefId;
 use middle::infer::InferCtxt;
-use middle::infer;
 use middle::lang_items::LangItem;
 use middle::subst::{self, Substs};
 use trans::base;

@@ -360,6 +360,8 @@ pub fn type_known_to_meet_builtin_bound<'a,'tcx>(infcx: &mut InferCtxt<'a,'tcx>,
         // We can use a dummy node-id here because we won't pay any mind
         // to region obligations that arise (there shouldn't really be any
         // anyhow).
+        // let old_duplicates = self.duplicate_set.clone();
+
         let cause = ObligationCause::misc(span, ast::DUMMY_NODE_ID);
 
         infcx.register_builtin_bound(ty, bound, cause);
@@ -369,13 +371,13 @@ pub fn type_known_to_meet_builtin_bound<'a,'tcx>(infcx: &mut InferCtxt<'a,'tcx>,
         // assume it is move; linear is always ok.
         match infcx.select_all_or_error() {
             Ok(()) => {
-                debug!("type_known_to_meet_builtin_bound: ty={:?} bound={:?} success",
+                info!("type_known_to_meet_builtin_bound: ty={:?} bound={:?} success",
                        ty,
                        bound);
                 true
             }
             Err(e) => {
-                debug!("type_known_to_meet_builtin_bound: ty={:?} bound={:?} errors={:?}",
+                info!("type_known_to_meet_builtin_bound: ty={:?} bound={:?} errors={:?}",
                        ty,
                        bound,
                        e);
