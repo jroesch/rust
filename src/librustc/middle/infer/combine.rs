@@ -433,17 +433,17 @@ fn float_unification_error<'tcx>(a_is_expected: bool,
 }
 
 impl<'infcx, 'a, 'tcx> TransactionalMut for CombineFields<'infcx, 'a, 'tcx> {
-    type Snapshot = CombinedSnapshot;
+    type Snapshot = CombinedSnapshot<'tcx>;
 
-    fn start_snapshot(&mut self) -> CombinedSnapshot {
+    fn start_snapshot(&mut self) -> CombinedSnapshot<'tcx> {
         self.infcx.borrow_mut().start_snapshot()
     }
 
-    fn rollback_to(&mut self, cause: &str, snapshot: CombinedSnapshot) {
+    fn rollback_to(&mut self, cause: &str, snapshot: CombinedSnapshot<'tcx>) {
         self.infcx.borrow_mut().rollback_to(cause, snapshot)
     }
 
-    fn commit_from(&mut self, snapshot: CombinedSnapshot) {
+    fn commit_from(&mut self, snapshot: CombinedSnapshot<'tcx>) {
         self.infcx.borrow_mut().commit_from(snapshot);
     }
 }

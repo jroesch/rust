@@ -33,7 +33,6 @@ use syntax::ast;
 use syntax::attr;
 use syntax::errors;
 use std::hash::{Hasher, Hash, SipHasher};
-use std::cell::RefCell;
 
 pub fn monomorphic_fn<'a, 'tcx>(ccx: &CrateContext<'a, 'tcx>,
                                 fn_id: DefId,
