@@ -84,16 +84,16 @@ pub struct InferCtxt<'a, 'tcx: 'a> {
     // We instantiate UnificationTable with bounds<Ty> because the
     // types that might instantiate a general type variable have an
     // order, represented by its upper and lower bounds.
-    type_variables: RefCell<type_variable::TypeVariableTable<'tcx>>,
+    pub type_variables: RefCell<type_variable::TypeVariableTable<'tcx>>,
 
     // Map from integral variable to the kind of integer it represents
-    int_unification_table: RefCell<UnificationTable<ty::IntVid>>,
+    pub int_unification_table: RefCell<UnificationTable<ty::IntVid>>,
 
     // Map from floating variable to the kind of float it represents
-    float_unification_table: RefCell<UnificationTable<ty::FloatVid>>,
+    pub float_unification_table: RefCell<UnificationTable<ty::FloatVid>>,
 
     // For region variables.
-    region_vars: RegionVarBindings<'a, 'tcx>,
+    pub region_vars: RegionVarBindings<'a, 'tcx>,
 
     pub parameter_environment: ty::ParameterEnvironment<'a, 'tcx>,
 
@@ -559,13 +559,14 @@ fn expected_found<T>(a_is_expected: bool,
 }
 
 #[must_use = "once you start a snapshot, you should always consume it"]
-pub struct CombinedSnapshot {
-    type_snapshot: type_variable::Snapshot,
-    int_snapshot: unify::Snapshot<ty::IntVid>,
-    float_snapshot: unify::Snapshot<ty::FloatVid>,
-    region_vars_snapshot: RegionSnapshot,
-    predicates_snapshot: Snapshot,
-    region_obligations_snapshot: NodeMap<Snapshot>,
+pub struct CombinedSnapshot<'tcx> {
+    pub type_snapshot: type_variable::Snapshot,
+    pub int_snapshot: unify::Snapshot<ty::IntVid>,
+    pub float_snapshot: unify::Snapshot<ty::FloatVid>,
+    pub region_vars_snapshot: RegionSnapshot,
+    pub predicates_snapshot: Snapshot,
+    pub region_obligations_snapshot: NodeMap<Snapshot>,
+    pub duplicate_set: FulfilledPredicates<'tcx>,
 }
 
 pub fn normalize_associated_type<'tcx,T>(tcx: &ty::ctxt<'tcx>, value: &T) -> T
@@ -888,7 +889,8 @@ impl<'a, 'tcx> InferCtxt<'a, 'tcx> {
                                float_snapshot,
                                region_vars_snapshot,
                                predicates_snapshot,
-                               region_obligations_snapshot
+                               region_obligations_snapshot,
+                               duplicate_set,
                              } = self.start_snapshot();
 
         let r = self.commit_if_ok(|_,_| f());
@@ -914,6 +916,8 @@ impl<'a, 'tcx> InferCtxt<'a, 'tcx> {
         // Commit region vars that may escape through resolved types.
         self.region_vars
             .commit(region_vars_snapshot);
+
+        self.duplicate_set = duplicate_set;
 
         r
     }
@@ -2171,6 +2175,7 @@ impl RegionVariableOrigin {
 
 // --------------------------------------------------------------
 
+#[derive(Clone)]
 pub struct FulfilledPredicates<'tcx> {
     set: FnvHashSet<(RFC1214Warning, ty::Predicate<'tcx>)>,
 }
@@ -2260,10 +2265,10 @@ impl<'tcx> FulfilledPredicates<'tcx> {
 }
 
 impl<'a, 'tcx> TransactionalMut for InferCtxt<'a, 'tcx> {
-    type Snapshot = CombinedSnapshot;
+    type Snapshot = CombinedSnapshot<'tcx>;
 
 
-    fn start_snapshot(&mut self) -> CombinedSnapshot {
+    fn start_snapshot(&mut self) -> CombinedSnapshot<'tcx> {
         CombinedSnapshot {
             type_snapshot: self.type_variables.borrow_mut().snapshot(),
             int_snapshot: self.int_unification_table.borrow_mut().snapshot(),
@@ -2273,11 +2278,12 @@ impl<'a, 'tcx> TransactionalMut for InferCtxt<'a, 'tcx> {
             region_obligations_snapshot: self.region_obligations
                                             .iter_mut()
                                             .map(|(k, v)| (*k, v.start_snapshot()))
-                                            .collect()
+                                            .collect(),
+            duplicate_set: self.duplicate_set.clone(),
         }
     }
 
-    fn rollback_to(&mut self, cause: &str, snapshot: CombinedSnapshot) {
+    fn rollback_to(&mut self, cause: &str, snapshot: CombinedSnapshot<'tcx>) {
         debug!("rollback_to(cause={})", cause);
 
         let CombinedSnapshot { type_snapshot,
@@ -2285,49 +2291,64 @@ impl<'a, 'tcx> TransactionalMut for InferCtxt<'a, 'tcx> {
                                float_snapshot,
                                region_vars_snapshot,
                                predicates_snapshot,
-                               region_obligations_snapshot } = snapshot;
+                               region_obligations_snapshot,
+                               duplicate_set } = snapshot;
 
         self.type_variables
             .borrow_mut()
             .rollback_to(type_snapshot);
+
         self.int_unification_table
             .borrow_mut()
             .rollback_to(int_snapshot);
+
         self.float_unification_table
             .borrow_mut()
             .rollback_to(float_snapshot);
+
         self.region_vars
             .rollback_to(region_vars_snapshot);
+
         self.predicates.rollback_to(predicates_snapshot);
 
         for (k, v) in region_obligations_snapshot {
             self.region_obligations.get_mut(&k).unwrap().rollback_to(v);
         }
+
+        self.duplicate_set = duplicate_set;
     }
 
-    fn commit_from(&mut self, snapshot: CombinedSnapshot) {
+    fn commit_from(&mut self, snapshot: CombinedSnapshot<'tcx>) {
         debug!("commit_from!");
         let CombinedSnapshot { type_snapshot,
                                int_snapshot,
                                float_snapshot,
                                region_vars_snapshot,
                                predicates_snapshot,
-                               region_obligations_snapshot } = snapshot;
+                               region_obligations_snapshot,
+                               .. } = snapshot;
 
         self.type_variables
             .borrow_mut()
             .commit(type_snapshot);
+
         self.int_unification_table
             .borrow_mut()
             .commit(int_snapshot);
+
         self.float_unification_table
             .borrow_mut()
             .commit(float_snapshot);
+
         self.region_vars
             .commit(region_vars_snapshot);
+
         self.predicates.commit(predicates_snapshot);
+
         for (k, v) in region_obligations_snapshot {
             self.region_obligations.get_mut(&k).unwrap().commit(v);
         }
+
+        // we implicitly commit the mutation to the duplicate_set here
     }
 }

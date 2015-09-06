@@ -57,7 +57,7 @@ struct ProbeContext<'fcx, 'a: 'fcx, 'tcx:'a> {
 }
 
 impl<'fcx, 'a, 'tcx> Transactional for ProbeContext<'fcx, 'a, 'tcx> {
-    type Snapshot = infer::CombinedSnapshot;
+    type Snapshot = infer::CombinedSnapshot<'tcx>;
 
     fn start_snapshot(&self) -> Self::Snapshot {
        self.fcx.infcx().start_snapshot()

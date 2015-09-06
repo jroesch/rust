@@ -37,7 +37,6 @@ use llvm;
 use middle::cfg;
 use middle::cstore::CrateStore;
 use middle::def_id::DefId;
-use middle::infer::InferCtxt;
 use middle::lang_items::{LangItem, ExchangeMallocFnLangItem, StartFnLangItem};
 use middle::weak_lang_items;
 use middle::pat_util::simple_name;

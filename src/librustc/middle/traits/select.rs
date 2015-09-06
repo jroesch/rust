@@ -3019,18 +3019,18 @@ impl<'cell, 'infcx, 'cx, 'tcx> SelectionContext<'cell, 'infcx, 'cx, 'tcx> {
 }
 
 impl<'cell, 'infcx, 'cx, 'tcx> TransactionalMut for SelectionContext<'cell, 'infcx, 'cx, 'tcx> {
-    type Snapshot = infer::CombinedSnapshot;
+    type Snapshot = infer::CombinedSnapshot<'tcx>;
 
-    fn start_snapshot(&mut self) -> infer::CombinedSnapshot {
+    fn start_snapshot(&mut self) -> infer::CombinedSnapshot<'tcx> {
 
         self.infcx().start_snapshot()
     }
 
-    fn rollback_to(&mut self, cause: &str, snapshot: infer::CombinedSnapshot) {
+    fn rollback_to(&mut self, cause: &str, snapshot: infer::CombinedSnapshot<'tcx>) {
         self.infcx().rollback_to(cause, snapshot);
     }
 
-    fn commit_from(&mut self, snapshot: infer::CombinedSnapshot) {
+    fn commit_from(&mut self, snapshot: infer::CombinedSnapshot<'tcx>) {
         self.infcx().commit_from(snapshot);
     }
 }

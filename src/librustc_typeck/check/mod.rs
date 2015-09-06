@@ -300,17 +300,17 @@ pub struct FnCtxt<'a, 'tcx: 'a> {
 }
 
 impl<'a, 'tcx> Transactional for FnCtxt<'a, 'tcx> {
-    type Snapshot = infer::CombinedSnapshot;
+    type Snapshot = infer::CombinedSnapshot<'tcx>;
 
-    fn start_snapshot(&self) -> CombinedSnapshot {
+    fn start_snapshot(&self) -> CombinedSnapshot<'tcx> {
         self.inh.infcx.borrow_mut().start_snapshot()
     }
 
-    fn rollback_to(&self, cause: &str, snapshot: CombinedSnapshot) {
+    fn rollback_to(&self, cause: &str, snapshot: CombinedSnapshot<'tcx>) {
         self.inh.infcx.borrow_mut().rollback_to(cause, snapshot)
     }
 
-    fn commit_from(&self, snapshot: CombinedSnapshot) {
+    fn commit_from(&self, snapshot: CombinedSnapshot<'tcx>) {
         self.inh.infcx.borrow_mut().commit_from(snapshot);
     }
 }
@@ -1263,6 +1263,58 @@ impl<'a, 'tcx> FnCtxt<'a, 'tcx> {
         ty
     }
 
+    /// Execute `f` and commit only the region bindings if successful.
+    /// The function f must be very careful not to leak any non-region
+    /// variables that get created.
+    pub fn commit_regions_if_ok<T, E, F>(&self, f: F) -> Result<T, E> where
+        F: FnOnce() -> Result<T, E>
+    {
+        debug!("commit_regions_if_ok()");
+        let CombinedSnapshot { type_snapshot,
+                               int_snapshot,
+                               float_snapshot,
+                               region_vars_snapshot,
+                               predicates_snapshot,
+                               region_obligations_snapshot,
+                               duplicate_set } = self.start_snapshot();
+
+        let r = self.commit_if_ok(|_,_| f());
+
+        debug!("commit_regions_if_ok: rolling back everything but regions");
+
+        // Roll back any non-region bindings - they should be resolved
+        // inside `f`, with, e.g. `resolve_type_vars_if_possible`.
+        let mut infcx = self.infcx();
+
+        infcx.type_variables
+            .borrow_mut()
+            .rollback_to(type_snapshot);
+
+        infcx.int_unification_table
+             .borrow_mut()
+             .rollback_to(int_snapshot);
+
+        infcx.float_unification_table
+             .borrow_mut()
+             .rollback_to(float_snapshot);
+
+        infcx.predicates.commit(predicates_snapshot);
+
+        for (k, v) in region_obligations_snapshot {
+            infcx.region_obligations.get_mut(&k).unwrap().commit(v);
+        }
+
+        // Commit region vars that may escape through resolved types.
+        infcx.region_vars
+             .commit(region_vars_snapshot);
+
+        // Rollback duplicate set too.
+        infcx.duplicate_set = duplicate_set;
+
+        r
+    }
+
+
     fn record_deferred_call_resolution(&self,
                                        closure_def_id: DefId,
                                        r: DeferredCallResolutionHandler<'tcx>) {
@@ -2005,9 +2057,11 @@ TypeOrigin::Misc(default.origin_span),
 
         self.select_all_obligations_and_apply_defaults();
 
-        match self.infcx().select_all_or_error() {
+        let mut infcx = self.infcx();
+
+        match infcx.select_all_or_error() {
             Ok(()) => { }
-            Err(errors) => { report_fulfillment_errors(&mut self.infcx(), &errors); }
+            Err(errors) => { report_fulfillment_errors(&mut infcx, &errors); }
         }
     }
 
@@ -2771,7 +2825,7 @@ fn expected_types_for_fn_args<'a, 'tcx>(fcx: &FnCtxt<'a, 'tcx>,
                                         -> Vec<Ty<'tcx>> {
     let expected_args = expected_ret.only_has_type(fcx).and_then(|ret_ty| {
         if let ty::FnConverging(formal_ret_ty) = formal_ret {
-            fcx.infcx().commit_regions_if_ok(|| {
+            fcx.commit_regions_if_ok(|| {
                 // Attempt to apply a subtyping relationship between the formal
                 // return type (likely containing type variables if the function
                 // is polymorphic) and the expected return type.
