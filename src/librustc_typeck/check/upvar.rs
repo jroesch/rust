@@ -49,7 +49,7 @@ use middle::mem_categorization::Categorization;
 use middle::ty::{self, Ty};
 use middle::infer::{InferCtxt, UpvarRegion};
 use std::collections::HashSet;
-use std::cell::{RefCell, RefMut};
+use std::cell::{RefMut};
 use syntax::ast;
 use syntax::codemap::Span;
 use rustc_front::hir;
@@ -190,9 +190,7 @@ impl<'fcx, 'a,'tcx> AdjustBorrowKind<'fcx, 'a,'tcx> {
         debug!("analyze_closure(id={:?}, body.id={:?})", id, body.id);
 
         {
-            let mut infcx = self.fcx.infcx();
-            let cell = RefCell::new(&mut *infcx);
-            let mut euv = euv::ExprUseVisitor::new(self, &cell);
+            let mut euv = euv::ExprUseVisitor::new(self, &self.fcx.inh.infcx);
             euv.walk_fn(decl, body);
         }
 

@@ -194,14 +194,16 @@ impl<'tcx> CastCheck<'tcx> {
                                             expr_str,
                                             cast_str));
         } else {
+            let expr_str = fcx.infcx().ty_to_string(t_expr);
+            let cast_str = fcx.infcx().ty_to_string(t_cast);
             fcx.tcx().sess.add_lint(lint::builtin::TRIVIAL_CASTS,
                                     self.expr.id,
                                     self.span,
                                     format!("trivial cast: `{}` as `{}`. Cast can be \
                                              replaced by coercion, this might require type \
                                              ascription or a temporary variable",
-                                            fcx.infcx().ty_to_string(t_expr),
-                                            fcx.infcx().ty_to_string(t_cast)));
+                                            expr_str,
+                                            cast_str));
         }
 
     }

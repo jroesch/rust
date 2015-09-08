@@ -136,27 +136,32 @@ fn deduce_expectations_from_obligations<'a,'tcx>(
 {
     // Here `expected_ty` is known to be a type inference variable.
 
-    let expected_sig =
+    // Since the inference context nows owns the pending predicates, and we need to invoke
+    // the resolution mechanism while processing them we need to split into two phases
+    // where we select the things we want to process, clone them and then continue with actual
+    // work.
+
+    let pending_projections: Vec<_> =
         fcx.infcx()
         .pending_obligations()
         .iter()
         .map(|obligation| &obligation.obligation)
         .filter_map(|obligation| {
             debug!("deduce_expectations_from_obligations: obligation.predicate={:?}",
-                   obligation.predicate);
-
+                 obligation.predicate);
             match obligation.predicate {
-                // Given a Projection predicate, we can potentially infer
-                // the complete signature.
-                ty::Predicate::Projection(ref proj_predicate) => {
-                    let trait_ref = proj_predicate.to_poly_trait_ref();
-                    self_type_matches_expected_vid(fcx, trait_ref, expected_vid)
-                        .and_then(|_| deduce_sig_from_projection(fcx, proj_predicate))
-                }
-                _ => {
-                    None
-                }
+                ty::Predicate::Projection(ref proj_predicate) => Some(proj_predicate.clone()),
+                _ => None
             }
+        }).collect();
+
+    let expected_sig =
+        pending_projections
+        .iter()
+        .filter_map(|proj_predicate| {
+            let trait_ref = proj_predicate.to_poly_trait_ref();
+            self_type_matches_expected_vid(fcx, trait_ref, expected_vid)
+                .and_then(|_| deduce_sig_from_projection(fcx, proj_predicate))
         })
         .next();
 
@@ -164,23 +169,29 @@ fn deduce_expectations_from_obligations<'a,'tcx>(
     // infer the kind. This can occur if there is a trait-reference
     // like `F : Fn<A>`. Note that due to subtyping we could encounter
     // many viable options, so pick the most restrictive.
-    let expected_kind =
+    let pending_predicates: Vec<_> =
         fcx.infcx()
         .pending_obligations()
         .iter()
-        .map(|obligation| &obligation.obligation)
-        .filter_map(|obligation| {
-            let opt_trait_ref = match obligation.predicate {
-                ty::Predicate::Projection(ref data) => Some(data.to_poly_trait_ref()),
-                ty::Predicate::Trait(ref data) => Some(data.to_poly_trait_ref()),
-                ty::Predicate::Equate(..) => None,
-                ty::Predicate::RegionOutlives(..) => None,
-                ty::Predicate::TypeOutlives(..) => None,
-                ty::Predicate::WellFormed(..) => None,
-                ty::Predicate::ObjectSafe(..) => None,
-            };
-            opt_trait_ref
-                .and_then(|trait_ref| self_type_matches_expected_vid(fcx, trait_ref, expected_vid))
+        .filter_map(|obligation| match obligation.predicate {
+            ty::Predicate::Projection(ref data) => Some(data.to_poly_trait_ref()),
+            ty::Predicate::Trait(ref data) => Some(data.to_poly_trait_ref()),
+            ty::Predicate::Equate(..) => None,
+            ty::Predicate::RegionOutlives(..) => None,
+            ty::Predicate::TypeOutlives(..) => None,
+            ty::Predicate::WellFormed(..) => None,
+            ty::Predicate::ObjectSafe(..) => None,
+        }).collect();
+
+    // Even if we can't infer the full signature, we may be able to
+    // infer the kind. This can occur if there is a trait-reference
+    // like `F : Fn<A>`. Note that due to subtyping we could encounter
+    // many viable options, so pick the most restrictive.
+    let expected_kind =
+        pending_predicates
+        .into_iter()
+        .filter_map(|trait_ref| {
+            self_type_matches_expected_vid(fcx, trait_ref, expected_vid)
                 .and_then(|trait_ref| fcx.tcx().lang_items.fn_trait_kind(trait_ref.def_id()))
         })
         .fold(None, pick_most_restrictive_closure_kind);
