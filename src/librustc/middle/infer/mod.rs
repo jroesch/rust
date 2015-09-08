@@ -1873,7 +1873,7 @@ impl<'a, 'tcx> InferCtxt<'a, 'tcx> {
             Ok(predicate) => {
                 self.register_predicate_obligation(predicate)
             }
-            Err(ErrorReported) => { panic!() }
+            Err(ErrorReported) => {}
         }
     }
 
