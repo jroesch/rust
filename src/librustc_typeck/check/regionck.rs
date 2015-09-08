@@ -101,7 +101,7 @@ use middle::ty::wf::ImpliedBound;
 
 use std::mem;
 use std::rc::Rc;
-use std::cell::{RefCell, RefMut};
+use std::cell::{RefMut};
 use syntax::{ast, ast_util};
 use syntax::codemap::Span;
 use rustc_front::intravisit::{self, Visitor};
@@ -680,12 +680,9 @@ fn visit_expr(rcx: &mut Rcx, expr: &hir::Expr) {
 
         // If necessary, constrain destructors in the unadjusted form of this
         // expression.
-        let cmt_result = {
-            let mut infcx = rcx.fcx.inh.infcx.borrow_mut();
-            let cell = RefCell::new(&mut *infcx);
-            let mc = mc::MemCategorizationContext::new(&cell);
-            mc.cat_expr_unadjusted(expr)
-        };
+        let cmt_result = mc::MemCategorizationContext::scoped(
+            &rcx.fcx.inh.infcx, |mc| mc.cat_expr_unadjusted(expr));
+
         match cmt_result {
             Ok(head_cmt) => {
                 check_safety_of_rvalue_destructor_if_necessary(rcx,
@@ -701,12 +698,9 @@ fn visit_expr(rcx: &mut Rcx, expr: &hir::Expr) {
 
     // If necessary, constrain destructors in this expression. This will be
     // the adjusted form if there is an adjustment.
-    let cmt_result = {
-        let mut infcx = rcx.fcx.inh.infcx.borrow_mut();
-        let cell = RefCell::new(&mut *infcx);
-        let mc = mc::MemCategorizationContext::new(&cell);
-        mc.cat_expr(expr)
-    };
+    let cmt_result = mc::MemCategorizationContext::scoped(
+        &rcx.fcx.inh.infcx, |mc| mc.cat_expr(expr));
+
     match cmt_result {
         Ok(head_cmt) => {
             check_safety_of_rvalue_destructor_if_necessary(rcx, head_cmt, expr.span);
@@ -1071,9 +1065,7 @@ fn constrain_autoderefs<'infcx, 'a, 'tcx>(rcx: &mut Rcx<'infcx, 'a, 'tcx>,
                        r, m);
 
                 {
-                    let mut infcx = rcx.fcx.inh.infcx.borrow_mut();
-                    let cell = RefCell::new(&mut *infcx);
-                    let mc = mc::MemCategorizationContext::new(&cell);
+                    let mc = mc::MemCategorizationContext::new(&rcx.fcx.inh.infcx);
                     let self_cmt = ignore_err!(mc.cat_expr_autoderefd(deref_expr, i));
                     debug!("constrain_autoderefs: self_cmt={:?}",
                            self_cmt);
@@ -1197,12 +1189,8 @@ fn link_addr_of(rcx: &mut Rcx, expr: &hir::Expr,
                 mutability: hir::Mutability, base: &hir::Expr) {
     debug!("link_addr_of(expr={:?}, base={:?})", expr, base);
 
-    let cmt = {
-        let mut infcx = rcx.fcx.inh.infcx.borrow_mut();
-        let cell = RefCell::new(&mut *infcx);
-        let mc = mc::MemCategorizationContext::new(&cell);
-        ignore_err!(mc.cat_expr(base))
-    };
+    let cmt = ignore_err!(mc::MemCategorizationContext::scoped(
+        &rcx.fcx.inh.infcx, |mc| mc.cat_expr(base)));
 
     debug!("link_addr_of: cmt={:?}", cmt);
 
@@ -1219,11 +1207,10 @@ fn link_local(rcx: &Rcx, local: &hir::Local) {
         Some(ref expr) => &**expr,
     };
 
-    let mut infcx = rcx.fcx.inh.infcx.borrow_mut();
-    let cell = RefCell::new(&mut *infcx);
-    let mc = mc::MemCategorizationContext::new(&cell);
-    let discr_cmt = ignore_err!(mc.cat_expr(init_expr));
-    link_pattern(rcx, mc, discr_cmt, &*local.pat);
+    mc::MemCategorizationContext::scoped(&rcx.fcx.inh.infcx, |mc| {
+        let discr_cmt = ignore_err!(mc.cat_expr(init_expr));
+        link_pattern(rcx, mc, discr_cmt, &*local.pat);
+    })
 }
 
 /// Computes the guarantors for any ref bindings in a match and
@@ -1231,16 +1218,16 @@ fn link_local(rcx: &Rcx, local: &hir::Local) {
 /// linked to the lifetime of its guarantor (if any).
 fn link_match(rcx: &Rcx, discr: &hir::Expr, arms: &[hir::Arm]) {
     debug!("regionck::for_match()");
-    let mut infcx = rcx.fcx.inh.infcx.borrow_mut();
-    let cell = RefCell::new(&mut *infcx);
-    let mc = mc::MemCategorizationContext::new(&cell);
-    let discr_cmt = ignore_err!(mc.cat_expr(discr));
-    debug!("discr_cmt={:?}", discr_cmt);
-    for arm in arms {
-        for root_pat in &arm.pats {
-            link_pattern(rcx, mc, discr_cmt.clone(), &**root_pat);
+    mc::MemCategorizationContext::scoped(&rcx.fcx.inh.infcx, |mc| {
+        let discr_cmt = ignore_err!(mc.cat_expr(discr));
+
+        debug!("discr_cmt={:?}", discr_cmt);
+        for arm in arms {
+            for root_pat in &arm.pats {
+                link_pattern(rcx, mc, discr_cmt.clone(), &**root_pat);
+            }
         }
-    }
+    })
 }
 
 /// Computes the guarantors for any ref bindings in a match and
@@ -1248,9 +1235,8 @@ fn link_match(rcx: &Rcx, discr: &hir::Expr, arms: &[hir::Arm]) {
 /// linked to the lifetime of its guarantor (if any).
 fn link_fn_args(rcx: &Rcx, body_scope: CodeExtent, args: &[hir::Arg]) {
     debug!("regionck::link_fn_args(body_scope={:?})", body_scope);
-    let mut infcx = rcx.fcx.inh.infcx.borrow_mut();
-    let cell = RefCell::new(&mut *infcx);
-    let mc = mc::MemCategorizationContext::new(&cell);
+    let mc = mc::MemCategorizationContext::new(&rcx.fcx.inh.infcx);
+
     for arg in args {
         let arg_ty = rcx.fcx.node_ty(arg.id);
         let re_scope = ty::ReScope(body_scope);
@@ -1266,7 +1252,7 @@ fn link_fn_args(rcx: &Rcx, body_scope: CodeExtent, args: &[hir::Arg]) {
 /// Link lifetimes of any ref bindings in `root_pat` to the pointers found in the discriminant, if
 /// needed.
 fn link_pattern<'infcx, 't, 'a, 'tcx>(rcx: &Rcx<'infcx, 'a, 'tcx>,
-                                      mc: mc::MemCategorizationContext<'t, 'infcx, 'a, 'tcx>,
+                                      mc: mc::MemCategorizationContext<'t, 'a, 'tcx>,
                                       discr_cmt: mc::cmt<'tcx>,
                                       root_pat: &hir::Pat) {
     debug!("link_pattern(discr_cmt={:?}, root_pat={:?})",
@@ -1306,13 +1292,9 @@ fn link_autoref(rcx: &Rcx,
 {
     debug!("link_autoref(autoref={:?})", autoref);
 
-    let expr_cmt = {
-        let mut infcx = rcx.fcx.inh.infcx.borrow_mut();
-        let cell = RefCell::new(&mut *infcx);
-        let mc = mc::MemCategorizationContext::new(&cell);
-        let result = ignore_err!(mc.cat_expr_autoderefd(expr, autoderefs));
-        result
-    };
+    let expr_cmt = ignore_err!(mc::MemCategorizationContext::scoped(
+            &rcx.fcx.inh.infcx,
+            |mc| mc.cat_expr_autoderefd(expr, autoderefs)));
 
     debug!("expr_cmt={:?}", expr_cmt);
 
@@ -1336,10 +1318,13 @@ fn link_by_ref(rcx: &Rcx,
                callee_scope: CodeExtent) {
     debug!("link_by_ref(expr={:?}, callee_scope={:?})",
            expr, callee_scope);
-    let mut infcx = rcx.fcx.inh.infcx.borrow_mut();
-    let cell = RefCell::new(&mut *infcx);
-    let mc = mc::MemCategorizationContext::new(&cell);
-    let expr_cmt = ignore_err!(mc.cat_expr(expr));
+    // Since we are sharing the inference context via a RefCell right now,
+    // limit the scope of  the MC context so that the reference will be
+    // free when we call link_region below.
+    let expr_cmt = ignore_err!(mc::MemCategorizationContext::scoped(
+        &rcx.fcx.inh.infcx,
+        |mc| mc.cat_expr(expr)));
+
     let borrow_region = ty::ReScope(callee_scope);
     link_region(rcx, expr.span, &borrow_region, ty::ImmBorrow, expr_cmt);
 }
