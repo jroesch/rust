@@ -1870,7 +1870,7 @@ pub fn drain_fulfillment_cx<'a,'tcx,T>(infcx: &InferCtxt<'a,'tcx>,
             Ok(predicate) => {
                 self.register_predicate_obligation(predicate)
             }
-            Err(ErrorReported) => { panic!() }
+            Err(ErrorReported) => {}
         }
     }
 
