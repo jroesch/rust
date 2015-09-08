@@ -1121,8 +1121,8 @@ impl<'a, 'tcx> AstConv<'tcx> for FnCtxt<'a, 'tcx> {
     }
 
     fn get_free_substs(&self) -> Option<&Substs<'tcx>> {
-        panic!()
         // Some(&self.inh.infcx.borrow().parameter_environment.free_substs)
+        panic!()
     }
 
     fn get_type_parameter_bounds(&self,
