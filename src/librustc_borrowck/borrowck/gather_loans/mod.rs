@@ -56,13 +56,12 @@ pub fn gather_loans_in_fn<'a, 'tcx>(bccx: &BorrowckCtxt<'a, 'tcx>,
     };
 
     let param_env = ty::ParameterEnvironment::for_item(bccx.tcx, fn_id);
-    let mut infcx = InferCtxt::new(bccx.tcx, &bccx.tcx.tables, Some(param_env));
+    let infcx = InferCtxt::new(bccx.tcx, &bccx.tcx.tables, Some(param_env));
     {
-        let cell = RefCell::new(&mut infcx);
+        let cell = RefCell::new(infcx);
         let mut euv = euv::ExprUseVisitor::new(&mut glcx, &cell);
         euv.walk_fn(decl, body);
     }
-
     glcx.report_potential_errors();
     let GatherLoanCtxt { all_loans, move_data, .. } = glcx;
     (all_loans, move_data)
@@ -527,8 +526,8 @@ struct StaticInitializerCtxt<'a, 'tcx: 'a> {
 impl<'a, 'tcx, 'v> Visitor<'v> for StaticInitializerCtxt<'a, 'tcx> {
     fn visit_expr(&mut self, ex: &Expr) {
         if let hir::ExprAddrOf(mutbl, ref base) = ex.node {
-            let mut infcx = InferCtxt::new(self.bccx.tcx, &self.bccx.tcx.tables, None);
-            let cell = RefCell::new(&mut infcx);
+            let infcx = InferCtxt::new(self.bccx.tcx, &self.bccx.tcx.tables, None);
+            let cell = RefCell::new(infcx);
             let mc = mc::MemCategorizationContext::new(&cell);
             let base_cmt = mc.cat_expr(&**base).unwrap();
             let borrow_kind = ty::BorrowKind::from_mutbl(mutbl);

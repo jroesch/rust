@@ -498,7 +498,8 @@ pub fn check_match<'a, 'tcx>(fcx: &FnCtxt<'a, 'tcx>,
     // of execution reach it, we will panic, so bottom is an appropriate
     // type in that case)
     let expected = expected.adjust_for_branches(fcx);
-    let result_ty = arms.iter().fold(fcx.infcx().next_diverging_ty_var(), |result_ty, arm| {
+    let diverging = fcx.infcx().next_diverging_ty_var();
+    let result_ty = arms.iter().fold(diverging, |result_ty, arm| {
         let bty = match expected {
             // We don't coerce to `()` so that if the match expression is a
             // statement it's branches can have any consistent type. That allows

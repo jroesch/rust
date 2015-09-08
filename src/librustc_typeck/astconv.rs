@@ -109,7 +109,7 @@ pub trait AstConv<'tcx> {
     /// are in scope into free ones. This function should only return Some
     /// within a fn body.
     /// See ParameterEnvironment::free_substs for more information.
-    fn get_free_substs(&self) -> Option<&Substs<'tcx>> {
+    fn get_free_substs(&self) -> Option<Substs<'tcx>> {
         None
     }
 
@@ -1487,7 +1487,7 @@ fn base_def_to_ty<'tcx>(this: &AstConv<'tcx>,
             // Self in impl (we know the concrete type).
             prohibit_type_params(tcx, base_segments);
             if let Some(&ty) = tcx.ast_ty_to_ty_cache.borrow().get(&self_ty_id) {
-                if let Some(free_substs) = this.get_free_substs() {
+                if let Some(ref free_substs) = this.get_free_substs() {
                     ty.subst(tcx, free_substs)
                 } else {
                     ty

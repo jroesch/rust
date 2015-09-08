@@ -1122,12 +1122,12 @@ fn check_for_mutation_in_guard<'a, 'tcx>(cx: &'a MatchCheckCtxt<'a, 'tcx>,
         cx: cx,
     };
 
-    let mut infcx = InferCtxt::new(
+    let infcx = InferCtxt::new(
         cx.tcx,
         &cx.tcx.tables,
         Some(checker.cx.param_env.clone()));
 
-    let cell = RefCell::new(&mut infcx);
+    let cell = RefCell::new(infcx);
     let mut visitor = ExprUseVisitor::new(&mut checker, &cell);
     visitor.walk_expr(guard);
 }

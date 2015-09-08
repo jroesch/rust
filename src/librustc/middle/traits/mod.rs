@@ -491,30 +491,28 @@ pub fn fully_normalize<'a,'tcx,T>(infcx: &mut InferCtxt<'a,'tcx>,
     //
     // I think we should probably land this refactor and then come
     // back to this is a follow-up patch.
-    infcx.probe(move |_, infcx| {
-        let normalized_value = try!(infcx.select_only(move |infcx| {
-            let Normalized { value: normalized_value, obligations } =
-                project::scoped_selcx(infcx, |mut selcx| {
-                    project::normalize(&mut selcx, cause, value)
-                });
+    let resolved_value = try!(infcx.select_only(move |infcx| {
+        let Normalized { value: normalized_value, obligations } =
+            SelectionContext::scoped(infcx, |mut selcx| {
+                project::normalize(&mut selcx, cause, value)
+            });
 
-            debug!("normalize_param_env: normalized_value={:?} obligations={:?}",
-                   normalized_value,
-                   obligations);
+        debug!("normalize_param_env: normalized_value={:?} obligations={:?}",
+               normalized_value,
+               obligations);
 
-            for obligation in obligations {
-                infcx.register_predicate_obligation(obligation);
-            }
+        for obligation in obligations {
+            infcx.register_predicate_obligation(obligation);
+        }
 
-            normalized_value
-        }));
+        infcx.resolve_type_vars_if_possible(&normalized_value)
+    }));
 
         try!(infcx.select_all_or_error());
     debug!("fully_normalize: select_all_or_error complete");
         let resolved_value = infcx.resolve_type_vars_if_possible(&normalized_value);
-        debug!("normalize_param_env: resolved_value={:?}", resolved_value);
-        Ok(resolved_value)
-    })
+    debug!("normalize_param_env: resolved_value={:?}", resolved_value);
+    Ok(resolved_value)
 }
 
 impl<'tcx,O> Obligation<'tcx,O> {

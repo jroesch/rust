@@ -244,10 +244,10 @@ impl OverloadedCallType {
 // mem_categorization, it requires a TYPER, which is a type that
 // supplies types from the tree. After type checking is complete, you
 // can just use the tcx as the typer.
-pub struct ExprUseVisitor<'d, 't, 'a: 't, 'tcx:'a+'d> {
-    typer: &'t infer::InferCtxt<'a, 'tcx>,
-    mc: mc::MemCategorizationContext<'t, 'a, 'tcx>,
-    delegate: &'d mut Delegate<'tcx>,
+pub struct ExprUseVisitor<'d, 'cell, 'cx: 'cell, 'tcx: 'cx + 'd> {
+    typer: &'cell RefCell<infer::InferCtxt<'cx, 'tcx>>,
+    mc: mc::MemCategorizationContext<'cell, 'cx, 'tcx>,
+    delegate: &'d mut (Delegate<'tcx>+'d)
 }
 
 // If the TYPER results in an error, it's because the type check
@@ -275,14 +275,14 @@ enum PassArgs {
     ByRef,
 }
 
-impl<'d,'t,'a,'tcx> ExprUseVisitor<'d,'t,'a,'tcx> {
+impl<'d,'cell,'cx,'tcx> ExprUseVisitor<'d, 'cell, 'cx, 'tcx> {
     pub fn new(delegate: &'d mut Delegate<'tcx>,
-               typer: &'t RefCell<infer::InferCtxt<'a, 'tcx>>)
-               -> ExprUseVisitor<'d, 't, 'a, 'tcx> {
-    {
-        let mc: mc::MemCategorizationContext<'t, 'a, 'tcx> =
-            mc::MemCategorizationContext::new(typer);
-        ExprUseVisitor { typer: typer, mc: mc, delegate: delegate }
+               typer: &'cell RefCell<infer::InferCtxt<'cx, 'tcx>>)
+               -> ExprUseVisitor<'d, 'cell, 'cx, 'tcx> {
+        ExprUseVisitor {
+            typer: typer,
+            mc: mc::MemCategorizationContext::new(typer),
+            delegate: delegate,
     }
 
     pub fn walk_fn(&mut self,
@@ -719,9 +719,12 @@ impl<'d,'t,'a,'tcx> ExprUseVisitor<'d,'t,'a,'tcx> {
     // consumed or borrowed as part of the automatic adjustment
     // process.
     fn walk_adjustment(&mut self, expr: &hir::Expr) {
-        let typer = self.typer.borrow();
-        //NOTE(@jroesch): mixed RefCell borrow causes crash
-        let adj = typer.adjustments().get(&expr.id).map(|x| x.clone());
+        let adj = {
+            let typer = self.typer.borrow();
+            let result = typer.adjustments().get(&expr.id).map(|x| x.clone());
+            result
+        };
+        
         if let Some(adjustment) = adj {
             match adjustment {
                 adjustment::AdjustReifyFnPointer |
@@ -980,20 +983,18 @@ impl<'d,'t,'a,'tcx> ExprUseVisitor<'d,'t,'a,'tcx> {
 
         let tcx = self.typer.borrow().tcx;
         let mc = &self.mc;
-        let mut typer = self.typer.borrow_mut();
+        let typer = self.typer;
         let def_map = &tcx.def_map;
         let delegate = &mut self.delegate;
         return_if_err!(mc.cat_pattern(cmt_discr.clone(), pat, |mc, cmt_pat, pat| {
             if pat_util::pat_is_binding(&def_map.borrow(), pat) {
-                let tcx = typer.tcx;
-
                 debug!("binding cmt_pat={:?} pat={:?} match_mode={:?}",
                        cmt_pat,
                        pat,
                        match_mode);
 
                 // pat_ty: the type of the binding being produced.
-                let pat_ty = return_if_err!(typer.node_ty(pat.id));
+                let pat_ty = return_if_err!(typer.borrow_mut().node_ty(pat.id));
 
                 // Each match binding is effectively an assignment to the
                 // binding being produced.
@@ -1014,8 +1015,11 @@ impl<'d,'t,'a,'tcx> ExprUseVisitor<'d,'t,'a,'tcx> {
                                             r, bk, RefBinding);
                         }
                     }
-                    hir::PatIdent(hir::BindByValue(_), _, _) => {
-                        let mode = copy_or_move(&mut typer, &cmt_pat, PatBindingMove);
+                   hir::PatIdent(hir::BindByValue(_), _, _) => {
+                        let mode = copy_or_move(
+                            &mut *typer.borrow_mut(),
+                            &cmt_pat,
+                            PatBindingMove);
                         debug!("walk_pat binding consuming pat");
                         delegate.consume_pat(pat, cmt_pat, mode);
                     }
@@ -1072,7 +1076,6 @@ impl<'d,'t,'a,'tcx> ExprUseVisitor<'d,'t,'a,'tcx> {
         // the leaves of the pattern tree structure.
         return_if_err!(mc.cat_pattern(cmt_discr, pat, |mc, cmt_pat, pat| {
             let def_map = def_map.borrow();
-            let tcx = typer.tcx;
 
             match pat.node {
                 hir::PatEnum(_, _) | hir::PatQPath(..) |
