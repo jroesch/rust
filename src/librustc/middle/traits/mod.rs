@@ -360,16 +360,16 @@ pub fn type_known_to_meet_builtin_bound<'a,'tcx>(infcx: &mut InferCtxt<'a,'tcx>,
         // We can use a dummy node-id here because we won't pay any mind
         // to region obligations that arise (there shouldn't really be any
         // anyhow).
-        // let old_duplicates = self.duplicate_set.clone();
 
-        let cause = ObligationCause::misc(span, ast::DUMMY_NODE_ID);
-
-        infcx.register_builtin_bound(ty, bound, cause);
+        let result = infcx.select_only(|infcx| {
+            let cause = ObligationCause::misc(span, ast::DUMMY_NODE_ID);
+            infcx.register_builtin_bound(ty, bound, cause);
+        });
 
         // Note: we only assume something is `Copy` if we can
         // *definitively* show that it implements `Copy`. Otherwise,
         // assume it is move; linear is always ok.
-        match infcx.select_all_or_error() {
+        match result {
             Ok(()) => {
                 info!("type_known_to_meet_builtin_bound: ty={:?} bound={:?} success",
                        ty,
@@ -384,7 +384,7 @@ pub fn type_known_to_meet_builtin_bound<'a,'tcx>(infcx: &mut InferCtxt<'a,'tcx>,
                 false
             }
         }
-    })
+   })
 }
 
 // FIXME: this is gonna need to be removed ...
@@ -486,21 +486,23 @@ pub fn fully_normalize<'a,'tcx,T>(infcx: &mut InferCtxt<'a,'tcx>,
     // I think we should probably land this refactor and then come
     // back to this is a follow-up patch.
     infcx.probe(move |_, infcx| {
+        let normalized_value = try!(infcx.select_only(move |infcx| {
+            let Normalized { value: normalized_value, obligations } =
+                project::scoped_selcx(infcx, |mut selcx| {
+                    project::normalize(&mut selcx, cause, value)
+                });
 
-        let Normalized { value: normalized_value, obligations } =
-            project::scoped_selcx(infcx, |mut selcx| {
-                project::normalize(&mut selcx, cause, value)
-            });
+            debug!("normalize_param_env: normalized_value={:?} obligations={:?}",
+                   normalized_value,
+                   obligations);
 
-        debug!("normalize_param_env: normalized_value={:?} obligations={:?}",
-               normalized_value,
-               obligations);
+            for obligation in obligations {
+                infcx.register_predicate_obligation(obligation);
+            }
 
-        for obligation in obligations {
-            infcx.register_predicate_obligation(obligation);
-        }
+            normalized_value
+        }));
 
-        try!(infcx.select_all_or_error());
         let resolved_value = infcx.resolve_type_vars_if_possible(&normalized_value);
         debug!("normalize_param_env: resolved_value={:?}", resolved_value);
         Ok(resolved_value)

@@ -46,6 +46,8 @@ use rustc_data_structures::snapshot_tree::{SnapshotTree};
 use rustc_data_structures::unify::{self, UnificationTable};
 use std::cell::{RefCell, Ref};
 use std::fmt;
+use std::rc::Rc;
+use std::mem;
 use syntax::ast;
 use syntax::codemap;
 use syntax::codemap::{Span, DUMMY_SP};
@@ -1712,6 +1714,21 @@ impl<'a, 'tcx> InferCtxt<'a, 'tcx> {
         Ok(result.fold_with(&mut freshener))
     }
 
+    // Emulates the old style of creating a fresh fulfillment context. This allows us to prove only
+    // this set of obligations registered by `f`.
+    pub fn select_only<R, F: FnOnce(&mut InferCtxt<'a, 'tcx>) -> R>(&mut self, f: F)-> Result<R,Vec<FulfillmentError<'tcx>>> {
+        let mut other_predicates = SnapshotTree::new();
+        mem::swap(&mut other_predicates, &mut self.predicates);
+
+        let value = f(self);
+
+        let result = self.select_all_or_error().map(|_| value);
+
+        mem::swap(&mut other_predicates, &mut self.predicates);
+
+        result
+    }
+
     pub fn select_all_or_error(&mut self) -> Result<(),Vec<FulfillmentError<'tcx>>> {
         try!(self.select_where_possible());
 
@@ -1854,15 +1871,14 @@ impl<'a, 'tcx> InferCtxt<'a, 'tcx> {
     {
         match predicate_for_builtin_bound(self.tcx, cause, builtin_bound, 0, ty) {
             Ok(predicate) => {
-                self.register_predicate_obligation(predicate);
+                self.register_predicate_obligation(predicate)
             }
-            Err(ErrorReported) => { }
+            Err(ErrorReported) => { panic!() }
         }
     }
 
     pub fn register_predicate_obligation(&mut self,
-                                         obligation: PredicateObligation<'tcx>)
-    {
+                                         obligation: PredicateObligation<'tcx>) {
         // this helps to reduce duplicate errors, as well as making
         // debug output much nicer to read and so on.
         let obligation = self.resolve_type_vars_if_possible(&obligation);
@@ -2113,7 +2129,9 @@ fn process_predicate<'cell, 'infcx, 'cx, 'tcx>(selcx: &mut SelectionContext<'cel
     };
 
     if is_complete {
+        info!("completing predicate obligation_id={}", obligation_id);
         selcx.infcx().predicates.get_mut(obligation_id).complete();
+        info!("predicate: {:?}", selcx.infcx().predicates.get(obligation_id).complete);
     }
 
     return is_complete;
