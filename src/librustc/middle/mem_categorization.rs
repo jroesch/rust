@@ -257,8 +257,8 @@ impl ast_node for hir::Pat {
 }
 
 #[derive(Copy, Clone)]
-pub struct MemCategorizationContext<'cell, 'infcx: 'cell, 'cx: 'infcx, 'tcx : 'cx> {
-    pub typer: &'cell RefCell<&'infcx mut infer::InferCtxt<'cx , 'tcx>>,
+pub struct MemCategorizationContext<'cell, 'cx: 'cell, 'tcx : 'cx> {
+    pub typer: &'cell RefCell<infer::InferCtxt<'cx , 'tcx>>,
 }
 
 pub type McResult<T> = Result<T, ()>;
@@ -359,9 +359,15 @@ impl MutabilityCategory {
     }
 }
 
-impl<'cell, 'infcx, 'cx, 'tcx> MemCategorizationContext<'cell, 'infcx, 'cx, 'tcx> {
-    pub fn new(infcx: &'cell RefCell<&'infcx mut infer::InferCtxt<'cx, 'tcx>>) -> MemCategorizationContext<'cell, 'infcx, 'cx, 'tcx> {
+impl<'cell, 'cx, 'tcx> MemCategorizationContext<'cell, 'cx, 'tcx> {
+    pub fn new(infcx: &'cell RefCell<infer::InferCtxt<'cx, 'tcx>>) -> MemCategorizationContext<'cell, 'cx, 'tcx> {
         MemCategorizationContext { typer: infcx }
+    }
+
+    pub fn scoped<F, T>(infcx: &'cell RefCell<infer::InferCtxt<'cx, 'tcx>>, f: F) -> T
+    where F: for<'c> Fn(MemCategorizationContext<'c, 'cx, 'tcx>) -> T {
+        let mc = MemCategorizationContext::new(infcx);
+        f(mc)
     }
 
     fn tcx(&self) -> &'cx ty::ctxt<'tcx> {
@@ -509,7 +515,8 @@ impl<'cell, 'infcx, 'cx, 'tcx> MemCategorizationContext<'cell, 'infcx, 'cx, 'tcx
           hir::ExprIndex(ref base, _) => {
             let method_call = ty::MethodCall::expr(expr.id());
             let context = InteriorOffsetKind::Index;
-            match self.typer.borrow_mut().node_method_ty(method_call) {
+            let method_ty = self.typer.borrow_mut().node_method_ty(method_call);
+            match method_ty {
                 Some(method_ty) => {
                     // If this is an index implemented by a method call, then it
                     // will include an implicit deref of the result.
@@ -608,7 +615,8 @@ impl<'cell, 'infcx, 'cx, 'tcx> MemCategorizationContext<'cell, 'infcx, 'cx, 'tcx
               let ty = try!(self.node_ty(fn_node_id));
               match ty.sty {
                   ty::TyClosure(closure_id, _) => {
-                      match self.typer.borrow().closure_kind(closure_id) {
+                      let kind = self.typer.borrow().closure_kind(closure_id);
+                      match kind {
                           Some(kind) => {
                               self.cat_upvar(id, span, var_id, fn_node_id, kind)
                           }
@@ -1168,7 +1176,7 @@ impl<'cell, 'infcx, 'cx, 'tcx> MemCategorizationContext<'cell, 'infcx, 'cx, 'tcx
     }
 
     pub fn cat_pattern<F>(&self, cmt: cmt<'tcx>, pat: &ast::Pat, mut op: F) -> McResult<()>
-        where F: FnMut(&MemCategorizationContext<'cell, 'infcx, 'cx, 'tcx>, cmt<'tcx>, &hir::Pat),
+        where F: FnMut(&MemCategorizationContext<'cell, 'cx, 'tcx>, cmt<'tcx>, &hir::Pat),
     {
         self.cat_pattern_(cmt, pat, &mut op)
     }
@@ -1176,7 +1184,7 @@ impl<'cell, 'infcx, 'cx, 'tcx> MemCategorizationContext<'cell, 'infcx, 'cx, 'tcx
     // FIXME(#19596) This is a workaround, but there should be a better way to do this
     fn cat_pattern_<F>(&self, cmt: cmt<'tcx>, pat: &hir::Pat, op: &mut F)
                        -> McResult<()>
-        where F : FnMut(&MemCategorizationContext<'cell, 'infcx, 'cx, 'tcx>, cmt<'tcx>, &hir::Pat),
+        where F : FnMut(&MemCategorizationContext<'cell, 'cx, 'tcx>, cmt<'tcx>, &hir::Pat),
     {
         // Here, `cmt` is the categorization for the value being
         // matched and pat is the pattern it is being matched against.

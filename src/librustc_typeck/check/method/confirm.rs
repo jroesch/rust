@@ -106,6 +106,7 @@ impl<'r,'a,'tcx> ConfirmContext<'r,'a,'tcx> {
 
         // Create the method type
         let method_ty = pick.item.as_opt_method().unwrap();
+
         let fty = self.tcx().mk_fn(None, self.tcx().mk_bare_fn(ty::BareFnTy {
             sig: ty::Binder(method_sig),
             unsafety: method_ty.fty.unsafety,
@@ -262,9 +263,10 @@ impl<'r,'a,'tcx> ConfirmContext<'r,'a,'tcx> {
                 // the process we will unify the transformed-self-type
                 // of the method with the actual type in order to
                 // unify some of these variables.
+                let self_ty = self.infcx().next_ty_var();
                 self.infcx().fresh_substs_for_trait(self.span,
                                                     &trait_def.generics,
-                                                    self.infcx().next_ty_var())
+                                                    self_ty)
             }
 
             probe::WhereClausePick(ref poly_trait_ref) => {

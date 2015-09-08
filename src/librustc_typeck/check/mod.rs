@@ -1123,9 +1123,8 @@ impl<'a, 'tcx> AstConv<'tcx> for FnCtxt<'a, 'tcx> {
         Ok(())
     }
 
-    fn get_free_substs(&self) -> Option<&Substs<'tcx>> {
-        // Some(&self.inh.infcx.borrow().parameter_environment.free_substs)
-        panic!()
+    fn get_free_substs(&self) -> Option<Substs<'tcx>> {
+        Some(self.inh.infcx.borrow().parameter_environment.free_substs.clone())
     }
 
     fn get_type_parameter_bounds(&self,
@@ -2082,7 +2081,6 @@ TypeOrigin::Misc(default.origin_span),
         self.select_all_obligations_and_apply_defaults();
 
         let mut infcx = self.infcx();
-
         match infcx.select_all_or_error() {
             Ok(()) => { }
             Err(errors) => { report_fulfillment_errors(&mut infcx, &errors); }
@@ -2091,9 +2089,8 @@ TypeOrigin::Misc(default.origin_span),
 
     /// Select as many obligations as we can at present.
     fn select_obligations_where_possible(&self) {
-        match
-            self.infcx().select_where_possible()
-        {
+        let mut infcx = self.infcx();
+        match infcx.select_where_possible() {
             Ok(()) => { }
             Err(errors) => { report_fulfillment_errors(&mut self.infcx(), &errors); }
         }
@@ -2104,11 +2101,13 @@ TypeOrigin::Misc(default.origin_span),
     /// `select_obligations_where_possible` except that it leads to repeated
     /// work.
     fn select_new_obligations(&self) {
-        match
-            self.infcx().select_new_obligations()
-        {
+        let mut infcx = self.infcx();
+
+        match infcx.select_new_obligations() {
             Ok(()) => { }
-            Err(errors) => { report_fulfillment_errors(&mut self.infcx(), &errors); }
+            Err(errors) => {
+                report_fulfillment_errors(&mut infcx, &errors);
+            }
         }
     }
 
@@ -4099,6 +4098,7 @@ fn check_block_with_expected<'a, 'tcx>(fcx: &FnCtxt<'a, 'tcx>,
     let mut warned = false;
     let mut any_diverges = false;
     let mut any_err = false;
+
     for s in &blk.stmts {
         check_stmt(fcx, s);
         let s_id = ::rustc_front::util::stmt_id(s);

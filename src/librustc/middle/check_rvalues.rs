@@ -44,13 +44,13 @@ impl<'a, 'tcx, 'v> intravisit::Visitor<'v> for RvalueContext<'a, 'tcx> {
         {
             let param_env = ParameterEnvironment::for_item(self.tcx, fn_id);
 
-            let mut infcx = InferCtxt::new(
+            let infcx = InferCtxt::new(
                 self.tcx,
                 &self.tcx.tables,
                 Some(param_env.clone()),
                 false);
 
-            let cell = RefCell::new(&mut infcx);
+            let cell = RefCell::new(infcx);
 
             let mut delegate = RvalueContextDelegate {
                 tcx: self.tcx,
