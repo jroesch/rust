@@ -1390,9 +1390,16 @@ impl<'a> Parser<'a> {
             // TYPE TO BE INFERRED
             TyInfer
         } else {
-            let this_token_str = self.this_token_to_string();
-            let msg = format!("expected type, found `{}`", this_token_str);
-            return Err(self.fatal(&msg[..]));
+            match self.parse_lit() {
+                Ok(lit) => {
+                    TySingleton(lit)
+                }
+                Err(_) => {
+                    let this_token_str = self.this_token_to_string();
+                    let msg = format!("expected type, found `{}`", this_token_str);
+                    return Err(self.fatal(&msg[..]));
+                }
+            }
         };
 
         let sp = mk_sp(lo, self.last_span.hi);

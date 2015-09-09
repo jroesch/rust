@@ -75,6 +75,7 @@ extern crate libc;
 extern crate rustc_llvm;
 extern crate rustc_back;
 extern crate rustc_data_structures;
+extern crate tir;
 extern crate serialize;
 extern crate rbml;
 extern crate collections;

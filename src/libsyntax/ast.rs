@@ -1439,7 +1439,10 @@ pub enum Ty_ {
     /// specified. This can appear anywhere in a type.
     TyInfer,
     // A macro in the type position.
-    TyMac(Mac)
+    TyMac(Mac),
+    // A literal with a singleton type, eventually we can expand this to support
+    // expressions.
+    TySingleton(P<Lit>),
 }
 
 #[derive(Clone, PartialEq, Eq, RustcEncodable, RustcDecodable, Hash, Debug, Copy)]

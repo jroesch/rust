@@ -276,6 +276,7 @@ dependencies = [
  "rustc_llvm 0.0.0",
  "serialize 0.0.0",
  "syntax 0.0.0",
+ "tir 0.1.0",
 ]
 
 [[package]]

@@ -89,6 +89,8 @@ pub struct InferCtxt<'a, 'tcx: 'a> {
 
     pub fulfillment_cx: RefCell<traits::FulfillmentContext<'tcx>>,
 
+    pub tir_interpreter: tir::interpreter::Interpreter,
+
     // This is a temporary field used for toggling on normalization in the inference context,
     // as we move towards the approach described here:
     // https://internals.rust-lang.org/t/flattening-the-contexts-for-fun-and-profit/2293
