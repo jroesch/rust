@@ -21,11 +21,13 @@ use middle::subst;
 use middle::transactional::TransactionalMut;
 use middle::ty::{self, HasTypeFlags, Ty};
 use middle::ty::fold::TypeFoldable;
-use middle::infer::{self, fixup_err_to_string, InferCtxt};
+use middle::infer::{fixup_err_to_string, InferCtxt};
 
 use std::rc::Rc;
 use syntax::ast;
 use syntax::codemap::{Span, DUMMY_SP};
+
+pub use self::error_reporting::TraitErrorKey;
 pub use self::error_reporting::report_fulfillment_errors;
 pub use self::error_reporting::report_overflow_error;
 pub use self::error_reporting::report_selection_error;

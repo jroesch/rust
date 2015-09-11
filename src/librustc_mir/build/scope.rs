@@ -105,7 +105,7 @@ pub struct LoopScope {
     pub break_block: BasicBlock, // where to go on a `break
 }
 
-impl<'a,'tcx> Builder<'a,'tcx> {
+impl<'infcx, 'a,'tcx> Builder<'infcx, 'a,'tcx> {
     /// Start a loop scope, which tracks where `continue` and `break`
     /// should branch to. See module comment for more details.
     pub fn in_loop_scope<F, R>(&mut self,
@@ -113,7 +113,7 @@ impl<'a,'tcx> Builder<'a,'tcx> {
                                break_block: BasicBlock,
                                f: F)
                                -> BlockAnd<R>
-        where F: FnOnce(&mut Builder<'a, 'tcx>) -> BlockAnd<R>
+        where F: FnOnce(&mut Builder<'infcx, 'a, 'tcx>) -> BlockAnd<R>
     {
         let extent = self.extent_of_innermost_scope();
         let loop_scope = LoopScope {

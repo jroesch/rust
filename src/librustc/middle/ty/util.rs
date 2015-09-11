@@ -15,7 +15,7 @@ use middle::const_eval::{self, ConstVal, ErrKind};
 use middle::const_eval::EvalHint::UncheckedExprHint;
 use middle::def_id::DefId;
 use middle::subst::{self, Subst, Substs};
-use middle::infer;
+use middle::infer::InferCtxt;
 use middle::pat_util;
 use middle::traits;
 use middle::ty::{self, Ty, TypeAndMut, TypeFlags};
@@ -183,7 +183,7 @@ impl<'a, 'tcx> ParameterEnvironment<'a, 'tcx> {
         let tcx = self.tcx;
 
         // FIXME: (@jroesch) float this code up
-        let infcx = infer::new_infer_ctxt(tcx, &tcx.tables, Some(self.clone()), false);
+        let mut infcx = InferCtxt::new(tcx, &tcx.tables, Some(self.clone()), false);
 
         let adt = match self_type.sty {
             ty::TyStruct(struct_def, substs) => {
@@ -656,9 +656,9 @@ impl<'tcx> ty::TyS<'tcx> {
                        -> bool
     {
         let tcx = param_env.tcx;
-        let infcx = infer::new_infer_ctxt(tcx, &tcx.tables, Some(param_env.clone()), false);
+        let mut infcx = InferCtxt::new(tcx, &tcx.tables, Some(param_env.clone()), false);
 
-        let is_impld = traits::type_known_to_meet_builtin_bound(&infcx,
+        let is_impld = traits::type_known_to_meet_builtin_bound(&mut infcx,
                                                                 self, bound, span);
 
         debug!("Ty::impls_bound({:?}, {:?}) = {:?}",

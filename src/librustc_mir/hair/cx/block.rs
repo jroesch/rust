@@ -18,7 +18,7 @@ use syntax::ast;
 impl<'tcx> Mirror<'tcx> for &'tcx hir::Block {
     type Output = Block<'tcx>;
 
-    fn make_mirror<'a>(self, cx: &mut Cx<'a, 'tcx>) -> Block<'tcx> {
+    fn make_mirror<'infcx, 'a>(self, cx: &mut Cx<'infcx, 'a, 'tcx>) -> Block<'tcx> {
         // We have to eagerly translate the "spine" of the statements
         // in order to get the lexical scoping correctly.
         let stmts = mirror_stmts(cx, self.id, self.stmts.iter().enumerate());
@@ -28,6 +28,17 @@ impl<'tcx> Mirror<'tcx> for &'tcx hir::Block {
             stmts: stmts,
             expr: self.expr.to_ref(),
         }
+    }
+}
+
+impl<'tcx> Mirror<'tcx> for &'tcx hir::Stmt {
+    type Output = Stmt<'tcx>;
+
+    fn make_mirror<'infcx, 'a>(self, _cx: &mut Cx<'infcx, 'a, 'tcx>) -> Stmt<'tcx> {
+        // In order to get the scoping correct, we eagerly mirror
+        // statements when we translate the enclosing block, so we
+        // should in fact never get to this point.
+        panic!("statements are eagerly mirrored");
     }
 }
 
@@ -84,7 +95,7 @@ fn mirror_stmts<'a,'tcx:'a,STMTS>(cx: &mut Cx<'a,'tcx>,
     return result;
 }
 
-pub fn to_expr_ref<'a, 'tcx: 'a>(cx: &mut Cx<'a, 'tcx>, block: &'tcx hir::Block) -> ExprRef<'tcx> {
+pub fn to_expr_ref<'infcx, 'a, 'tcx: 'a>(cx: &mut Cx<'infcx, 'a, 'tcx>, block: &'tcx hir::Block) -> ExprRef<'tcx> {
     let block_ty = cx.tcx.node_id_to_type(block.id);
     let temp_lifetime = cx.tcx.region_maps.temporary_scope(block.id);
     let expr = Expr {

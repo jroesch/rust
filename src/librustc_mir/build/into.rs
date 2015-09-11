@@ -19,14 +19,14 @@ use hair::*;
 use rustc::mir::repr::*;
 
 pub trait EvalInto<'tcx> {
-    fn eval_into<'a>(self,
-                     builder: &mut Builder<'a, 'tcx>,
-                     destination: &Lvalue<'tcx>,
-                     block: BasicBlock)
-                     -> BlockAnd<()>;
+    fn eval_into<'infcx, 'a>(self,
+                             builder: &mut Builder<'infcx, 'a, 'tcx>,
+                             destination: &Lvalue<'tcx>,
+                             block: BasicBlock)
+                             -> BlockAnd<()>;
 }
 
-impl<'a,'tcx> Builder<'a,'tcx> {
+impl<'infcx, 'a,'tcx> Builder<'infcx,'a,'tcx> {
     pub fn into<E>(&mut self,
                    destination: &Lvalue<'tcx>,
                    block: BasicBlock,
@@ -39,8 +39,8 @@ impl<'a,'tcx> Builder<'a,'tcx> {
 }
 
 impl<'tcx> EvalInto<'tcx> for ExprRef<'tcx> {
-    fn eval_into<'a>(self,
-                     builder: &mut Builder<'a, 'tcx>,
+    fn eval_into<'infcx, 'a>(self,
+                     builder: &mut Builder<'infcx, 'a, 'tcx>,
                      destination: &Lvalue<'tcx>,
                      block: BasicBlock)
                      -> BlockAnd<()> {
@@ -50,8 +50,8 @@ impl<'tcx> EvalInto<'tcx> for ExprRef<'tcx> {
 }
 
 impl<'tcx> EvalInto<'tcx> for Expr<'tcx> {
-    fn eval_into<'a>(self,
-                     builder: &mut Builder<'a, 'tcx>,
+    fn eval_into<'infcx, 'a>(self,
+                     builder: &mut Builder<'infcx, 'a, 'tcx>,
                      destination: &Lvalue<'tcx>,
                      block: BasicBlock)
                      -> BlockAnd<()> {
@@ -60,8 +60,8 @@ impl<'tcx> EvalInto<'tcx> for Expr<'tcx> {
 }
 
 impl<'tcx> EvalInto<'tcx> for Option<ExprRef<'tcx>> {
-    fn eval_into<'a>(self,
-                     builder: &mut Builder<'a, 'tcx>,
+    fn eval_into<'infcx, 'a>(self,
+                     builder: &mut Builder<'infcx, 'a, 'tcx>,
                      destination: &Lvalue<'tcx>,
                      block: BasicBlock)
                      -> BlockAnd<()> {

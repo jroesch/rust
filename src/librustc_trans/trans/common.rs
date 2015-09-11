@@ -1004,22 +1004,24 @@ pub fn fulfill_obligation<'a, 'tcx>(ccx: &CrateContext<'a, 'tcx>,
 
         let obligation =
             traits::Obligation::new(traits::ObligationCause::misc(span, ast::DUMMY_NODE_ID),
-                                trait_ref.to_poly_trait_predicate());
-    let selection = match selcx.select(&obligation) {
-        Ok(Some(selection)) => selection,
-        Ok(None) => {
-            // Ambiguity can happen when monomorphizing during trans
+                                    trait_ref.to_poly_trait_predicate());
+
+        match selcx.select(&obligation) {
+            Ok(Some(selection)) => selection,
+            Ok(None) => {
+                // Ambiguity can happen when monomorphizing during trans
             // expands to some humongo type that never occurred
             // statically -- this humongo type can then overflow,
             // leading to an ambiguous result. So report this as an
             // overflow bug, since I believe this is the only case
             // where ambiguity can result.
-            debug!("Encountered ambiguity selecting `{:?}` during trans, \
-                    presuming due to overflow",
-                   trait_ref);
-            ccx.sess().span_fatal(
-                span,
-                "reached the recursion limit during monomorphization (selection ambiguity)");
+                debug!("Encountered ambiguity selecting `{:?}` during trans, \
+                        presuming due to overflow",
+                       trait_ref);
+
+                ccx.sess().span_fatal(
+                    span,
+                    "reached the recursion limit during monomorphization (selection ambiguity)");
             }
             Err(e) => {
                 tcx.sess.span_bug(
@@ -1038,7 +1040,7 @@ pub fn fulfill_obligation<'a, 'tcx>(ccx: &CrateContext<'a, 'tcx>,
         infcx.register_predicate_obligation(predicate);
     });
 
-    let vtable = erase_regions(tcx,
+    let vtable = tcx.erase_regions(
        &infcx.drain_fulfillment_cx_or_panic(&vtable, span));
 
     info!("Cache miss: {:?} => {:?}", trait_ref, vtable);

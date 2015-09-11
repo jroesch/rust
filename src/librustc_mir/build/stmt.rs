@@ -12,7 +12,7 @@ use build::{BlockAnd, BlockAndExtension, Builder};
 use hair::*;
 use rustc::mir::repr::*;
 
-impl<'a,'tcx> Builder<'a,'tcx> {
+impl<'infcx,'a,'tcx> Builder<'infcx,'a,'tcx> {
     pub fn stmts(&mut self, mut block: BasicBlock, stmts: Vec<StmtRef<'tcx>>) -> BlockAnd<()> {
         // This convoluted structure is to avoid using recursion as we walk down a list
         // of statements. Basically, the structure we get back is something like:

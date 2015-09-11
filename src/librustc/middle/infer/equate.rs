@@ -80,7 +80,7 @@ impl<'infcx, 'a, 'tcx> TypeRelation<'infcx,'a,'tcx> for Equate<'infcx, 'a, 'tcx>
             }
 
             _ => {
-                try!(combine::super_combine_tys(self.fields.infcx, self, a, b));
+                try!(combine::super_combine_tys(self, a, b));
                 Ok(a)
             }
         }

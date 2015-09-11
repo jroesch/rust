@@ -26,8 +26,10 @@ use transform::*;
 use rustc::mir::repr::Mir;
 use hair::cx::Cx;
 use std::fs::File;
+use std::cell::RefCell;
+use tcx::{PatNode, Cx};
 
-use self::rustc::middle::infer;
+use self::rustc::middle::infer::InferCtxt;
 use self::rustc::middle::region::CodeExtentData;
 use self::rustc::middle::ty::{self, Ty};
 use self::rustc::util::common::ErrorReported;
@@ -141,10 +143,11 @@ impl<'a, 'm, 'tcx> Visitor<'tcx> for InnerDump<'a,'m,'tcx> {
 
         let param_env = ty::ParameterEnvironment::for_item(self.tcx, id);
 
-        let infcx = infer::new_infer_ctxt(self.tcx, &self.tcx.tables, Some(param_env), true);
+        let infcx = InferCtxt::new(self.tcx, &self.tcx.tables, Some(param_env), true);
+        let cell = RefCell::new(infcx);
 
-        match build_mir(Cx::new(&infcx), implicit_arg_tys, id, span, decl, body) {
-            Ok(mut mir) => {
+        match build_mir(Cx::new(&cell), implicit_arg_tys, id, span, decl, body) {
+            Ok(mir) => {
                 simplify_cfg::SimplifyCfg::new().run_on_mir(&mut mir);
 
                 let meta_item_list = self.attr
@@ -188,7 +191,7 @@ impl<'a, 'm, 'tcx> Visitor<'tcx> for InnerDump<'a,'m,'tcx> {
     }
 }
 
-fn build_mir<'a,'tcx:'a>(cx: Cx<'a,'tcx>,
+fn build_mir<'infcx, 'a: 'infcx,'tcx:'a>(cx: Cx<'infcx, 'a, 'tcx>,
                          implicit_arg_tys: Vec<Ty<'tcx>>,
                          fn_id: ast::NodeId,
                          span: Span,
