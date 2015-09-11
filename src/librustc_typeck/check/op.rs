@@ -1,4 +1,4 @@
-// Copyright 2014 The Rust Project Developers. See the COPYRIGHT
+    // Copyright 2014 The Rust Project Developers. See the COPYRIGHT
 // file at the top-level directory of this distribution and at
 // http://rust-lang.org/COPYRIGHT.
 //
@@ -303,7 +303,7 @@ fn lookup_op_method<'fcx, 'a, 'tcx>(fcx: &'fcx FnCtxt<'a, 'tcx>,
                                     expr: &'tcx hir::Expr,
                                     lhs_ty: Ty<'tcx>,
                                     other_tys: Vec<Ty<'tcx>>,
-                                    opname: hir::Name,
+                                    opname: ast::Name,
                                     trait_did: Option<DefId>,
                                     lhs_expr: &'a hir::Expr)
                                     -> Result<Ty<'tcx>,()>

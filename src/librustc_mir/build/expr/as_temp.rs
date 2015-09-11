@@ -15,7 +15,7 @@ use build::expr::category::Category;
 use hair::*;
 use rustc::mir::repr::*;
 
-impl<'a,'tcx> Builder<'a,'tcx> {
+impl<'infcx,'a,'tcx> Builder<'infcx,'a,'tcx> {
     /// Compile `expr` into a fresh temporary. This is used when building
     /// up rvalues so as to freeze the value that will be consumed.
     pub fn as_temp<M>(&mut self, block: BasicBlock, expr: M) -> BlockAnd<Lvalue<'tcx>>

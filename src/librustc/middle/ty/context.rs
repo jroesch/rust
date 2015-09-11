@@ -21,6 +21,7 @@ use middle;
 use middle::cstore::CrateStore;
 use middle::def::DefMap;
 use middle::def_id::DefId;
+use middle::infer;
 use middle::free_region::FreeRegionMap;
 use middle::region::RegionMaps;
 use middle::resolve_lifetime;

@@ -20,7 +20,7 @@ use middle::free_region::FreeRegionMap;
 use middle::subst;
 use middle::ty::{self, Ty, TypeFoldable};
 use middle::transactional::TransactionalMut;
-use middle::infer::{self, fixup_err_to_string, InferCtxt};
+use middle::infer::{fixup_err_to_string, InferCtxt};
 
 use std::rc::Rc;
 use syntax::ast;

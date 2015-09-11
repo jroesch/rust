@@ -101,7 +101,7 @@ use middle::ty::wf::ImpliedBound;
 use std::mem;
 use std::rc::Rc;
 use std::cell::{RefMut};
-use syntax::{ast, ast_util};
+use syntax::{ast};
 use syntax::codemap::Span;
 use rustc_front::intravisit::{self, Visitor};
 use rustc_front::hir;
@@ -144,7 +144,7 @@ pub fn regionck_item<'fcx,'cx,'tcx>(fcx: &'fcx FnCtxt<'cx,'tcx>,
 }
 
 pub fn regionck_fn<'fcx, 'cx, 'tcx>(fcx: &'fcx FnCtxt<'cx, 'tcx>,
-                                    fn_id: hir::NodeId,
+                                    fn_id: ast::NodeId,
                                     fn_span: Span,
                                     decl: &hir::FnDecl,
                                     blk: &hir::Block) {
@@ -422,7 +422,7 @@ impl<'fcx, 'a, 'tcx> Rcx<'fcx, 'a, 'tcx> {
         for &ty in fn_sig_tys {
             let ty = self.resolve_type(ty);
             debug!("relate_free_regions(t={:?})", ty);
-            let implied_bounds = wf::implied_bounds(
+            let implied_bounds = ty::wf::implied_bounds(
                 &mut self.fcx.infcx(),
                 body_id,
                 ty,
@@ -1286,7 +1286,7 @@ fn link_by_ref(rcx: &Rcx,
 /// some reference (`&T`, `&str`, etc).
 fn link_region_from_node_type<'infcx, 'a, 'tcx>(rcx: &Rcx<'infcx, 'a, 'tcx>,
                                                 span: Span,
-                                                id: hir::NodeId,
+                                                id: ast::NodeId,
                                                 mutbl: hir::Mutability,
                                                 cmt_borrowed: mc::cmt<'tcx>) {
     debug!("link_region_from_node_type(id={:?}, mutbl={:?}, cmt_borrowed={:?})",

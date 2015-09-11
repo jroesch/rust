@@ -162,7 +162,7 @@ endif
 # that the snapshot will be generated with a statically linked rustc so we only
 # have to worry about the distribution of one file (with its native dynamic
 # dependencies)
-RUSTFLAGS_STAGE0 += -C prefer-dynamic
+RUSTFLAGS_STAGE0 += -C prefer-dynamic -C no-stack-check
 RUSTFLAGS_STAGE1 += -C prefer-dynamic
 RUST_LIB_FLAGS_ST2 += -C prefer-dynamic
 RUST_LIB_FLAGS_ST3 += -C prefer-dynamic
@@ -305,7 +305,7 @@ LLVM_VERSION_$(1)=$$(shell "$$(LLVM_CONFIG_$(1))" --version)
 LLVM_BINDIR_$(1)=$$(shell "$$(LLVM_CONFIG_$(1))" --bindir)
 LLVM_INCDIR_$(1)=$$(shell "$$(LLVM_CONFIG_$(1))" --includedir)
 LLVM_LIBDIR_$(1)=$$(shell "$$(LLVM_CONFIG_$(1))" --libdir)
-LLVM_LIBDIR_RUSTFLAGS_$(1)=-L "$$(LLVM_LIBDIR_$(1))"
+LLVM_LIBDIR_RUSTFLAGS_$(1)=-L native="$$(LLVM_LIBDIR_$(1))"
 LLVM_LDFLAGS_$(1)=$$(shell "$$(LLVM_CONFIG_$(1))" --ldflags)
 ifeq ($$(findstring freebsd,$(1)),freebsd)
 # On FreeBSD, it may search wrong headers (that are for pre-installed LLVM),

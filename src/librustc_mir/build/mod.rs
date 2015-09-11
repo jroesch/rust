@@ -18,8 +18,8 @@ use rustc_front::hir;
 use syntax::ast;
 use syntax::codemap::Span;
 
-pub struct Builder<'a, 'tcx: 'a> {
-    hir: Cx<'a, 'tcx>,
+struct Builder<'infcx, 'a: 'infcx, 'tcx: 'a> {
+    hir: Cx<'infcx, 'a, 'tcx>,
     cfg: CFG<'tcx>,
     scopes: Vec<scope::Scope<'tcx>>,
     loop_scopes: Vec<scope::LoopScope>,
@@ -122,7 +122,7 @@ pub fn construct<'a,'tcx>(hir: Cx<'a,'tcx>,
     }
 }
 
-impl<'a,'tcx> Builder<'a,'tcx> {
+impl<'infcx,'a,'tcx> Builder<'infcx,'a,'tcx> {
     fn args_and_body(&mut self,
                      mut block: BasicBlock,
                      implicit_arguments: Vec<Ty<'tcx>>,

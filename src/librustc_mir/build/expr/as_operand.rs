@@ -15,7 +15,7 @@ use build::expr::category::Category;
 use hair::*;
 use rustc::mir::repr::*;
 
-impl<'a,'tcx> Builder<'a,'tcx> {
+impl<'infcx,'a,'tcx> Builder<'infcx,'a,'tcx> {
     /// Compile `expr` into a value that can be used as an operand.
     /// If `expr` is an lvalue like `x`, this will introduce a
     /// temporary `tmp = x`, so that we capture the value of `x` at

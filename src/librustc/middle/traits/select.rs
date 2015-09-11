@@ -36,7 +36,6 @@ use super::object_safety;
 use super::util;
 
 use middle::def_id::DefId;
-use middle::fast_reject;
 use middle::subst::{Subst, Substs, TypeSpace};
 use middle::ty::{self, ToPredicate, RegionEscape, ToPolyTraitRef, Ty, HasTypeFlags};
 use middle::infer;
@@ -493,7 +492,7 @@ impl<'cell, 'infcx, 'cx, 'tcx> SelectionContext<'cell, 'infcx, 'cx, 'tcx> {
 
             ty::Predicate::WellFormed(ty) => {
                 match ty::wf::obligations(&mut self.infcx.borrow_mut(),
-                                      obligation.cause.body_id,
+                                          obligation.cause.body_id,
                                           ty, obligation.cause.span,
                     Some(obligations) =>
                         self.evaluate_predicates_recursively(previous_stack, obligations.iter()),
@@ -1440,7 +1439,7 @@ impl<'cell, 'infcx, 'cx, 'tcx> SelectionContext<'cell, 'infcx, 'cx, 'tcx> {
 
         self.commit_if_ok(|snapshot, selcx| {
             let (self_ty, _) =
-                self.infcx().skolemize_late_bound_regions(&obligation.self_ty(), snapshot);
+                selcx.infcx().skolemize_late_bound_regions(&obligation.self_ty(), snapshot);
             let poly_trait_ref = match self_ty.sty {
                 ty::TyTrait(ref data) => {
                     match selcx.tcx().lang_items.to_builtin_kind(obligation.predicate.def_id()) {
@@ -2804,12 +2803,12 @@ impl<'cell, 'infcx, 'cx, 'tcx> SelectionContext<'cell, 'infcx, 'cx, 'tcx> {
                                              origin,
                                              poly_trait_ref,
                                              obligation.predicate.to_poly_trait_ref()) {
-    /// Determines whether the self type declared against
             Ok(()) => Ok(()),
             Err(_) => Err(()),
         }
     }
 
+    /// Determines whether the self type declared against
     /// `impl_def_id` matches `obligation_self_ty`. If successful,
     /// returns the substitutions used to make them match. See
     /// `match_impl()`. For example, if `impl_def_id` is declared
@@ -2885,8 +2884,8 @@ impl<'cell, 'infcx, 'cx, 'tcx> SelectionContext<'cell, 'infcx, 'cx, 'tcx> {
                               current: &ty::PolyTraitRef<'tcx>)
                               -> bool
     {
-        let mut matcher = ty::_match::Match::new(self.tcx());
-        let mut matcher = ty_match::Match::new(infcx);
+        let mut infcx = self.infcx();
+        let mut matcher = ty::_match::Match::new(&mut infcx);
         matcher.relate(previous, current).is_ok()
     }
 

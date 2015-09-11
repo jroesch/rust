@@ -14,12 +14,12 @@ use hair::*;
 use rustc::mir::repr::*;
 use std::u32;
 
-impl<'a,'tcx> Builder<'a,'tcx> {
-    pub fn field_match_pairs<'pat>(&mut self,
-                                   lvalue: Lvalue<'tcx>,
-                                   subpatterns: &'pat [FieldPattern<'tcx>])
-                                   -> Vec<MatchPair<'pat, 'tcx>> {
-        subpatterns.iter()
+impl<'infcx, 'a,'tcx> Builder<'infcx, 'a,'tcx> {
+    pub fn field_match_pairs(&mut self,
+                             lvalue: Lvalue<'tcx>,
+                             subpatterns: Vec<FieldPatternRef<'tcx>>)
+                             -> Vec<MatchPair<'tcx>> {
+        subpatterns.into_iter()
                    .map(|fieldpat| {
                        let lvalue = lvalue.clone().field(fieldpat.field);
                        MatchPair::new(lvalue, &fieldpat.pattern)

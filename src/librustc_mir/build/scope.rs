@@ -114,7 +114,7 @@ pub struct LoopScope {
     pub might_break: bool
 }
 
-impl<'a,'tcx> Builder<'a,'tcx> {
+impl<'infcx, 'a,'tcx> Builder<'infcx, 'a,'tcx> {
     /// Start a loop scope, which tracks where `continue` and `break`
     /// should branch to. See module comment for more details.
     ///

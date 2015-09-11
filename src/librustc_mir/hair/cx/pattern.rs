@@ -44,12 +44,62 @@ impl<'cx, 'tcx> Cx<'cx, 'tcx> {
         PatCx::new(self, None).to_pattern(pat)
     }
 
+    fn slice_or_array_pattern<'infcx,'a>(&self,
+                                  cx: &mut Cx<'infcx,'a,'tcx>,
+                                  ty: Ty<'tcx>,
+                                  prefix: &'tcx Vec<P<hir::Pat>>,
+                                  slice: &'tcx Option<P<hir::Pat>>,
+                                  suffix: &'tcx Vec<P<hir::Pat>>)
+                                  -> PatternKind<'tcx> {
+        match ty.sty {
+            ty::TySlice(..) =>
+                // matching a slice or fixed-length array
+                PatternKind::Slice {
+                    prefix: self.pat_refs(prefix),
+                    slice: self.opt_pat_ref(slice),
+                    suffix: self.pat_refs(suffix),
+                },
+
+            ty::TyArray(_, len) => {
+                // fixed-length array
+                assert!(len >= prefix.len() + suffix.len());
+                PatternKind::Array {
+                    prefix: self.pat_refs(prefix),
+                    slice: self.opt_pat_ref(slice),
+                    suffix: self.pat_refs(suffix),
+                }
+            }
+
     pub fn refutable_pat(&mut self,
                          binding_map: Option<&FnvHashMap<ast::Name, ast::NodeId>>,
                          pat: &hir::Pat)
                          -> Pattern<'tcx> {
         PatCx::new(self, binding_map).to_pattern(pat)
     }
+
+    fn variant_or_leaf<'infcx, 'a>(&self,
+                                   cx: &mut Cx<'infcx, 'a, 'tcx>,
+                                   subpatterns: Vec<FieldPatternRef<'tcx>>)
+                                   -> PatternKind<'tcx> {
+        let def = cx.tcx.def_map.borrow().get(&self.pat.id).unwrap().full_def();
+        match def {
+            def::DefVariant(enum_id, variant_id, _) => {
+                let adt_def = cx.tcx.lookup_adt_def(enum_id);
+                if adt_def.variants.len() > 1 {
+                    PatternKind::Variant {
+                        adt_def: adt_def,
+                        variant_index: adt_def.variant_index_with_id(variant_id),
+                        subpatterns: subpatterns,
+                    }
+                } else {
+                    PatternKind::Leaf { subpatterns: subpatterns }
+                }
+            }
+
+            // NB: resolving to DefStruct means the struct *constructor*,
+            // not the struct as a type.
+            def::DefStruct(..) | def::DefTy(..) => {
+                PatternKind::Leaf { subpatterns: subpatterns }
 }
 
 impl<'patcx, 'cx, 'tcx> PatCx<'patcx, 'cx, 'tcx> {

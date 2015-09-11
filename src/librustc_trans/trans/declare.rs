@@ -21,7 +21,7 @@
 //! * When in doubt, define.
 use llvm::{self, ValueRef};
 use middle::ty;
-use middle::infer::InferCtxt;
+use middle::infer::{self, InferCtxt};
 use syntax::abi;
 use trans::attributes;
 use trans::base;

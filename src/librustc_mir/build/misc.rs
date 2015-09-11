@@ -18,7 +18,7 @@ use rustc::mir::repr::*;
 use std::u32;
 use syntax::codemap::Span;
 
-impl<'a,'tcx> Builder<'a,'tcx> {
+impl<'infcx, 'a,'tcx> Builder<'infcx,'a,'tcx> {
     /// Add a new temporary value of type `ty` storing the result of
     /// evaluating `expr`.
     ///

@@ -29,11 +29,11 @@ use rustc::mir::repr::*;
 
 use std::mem;
 
-impl<'a,'tcx> Builder<'a,'tcx> {
-    pub fn simplify_candidate<'pat>(&mut self,
-                                    mut block: BasicBlock,
-                                    candidate: &mut Candidate<'pat, 'tcx>)
-                                    -> BlockAnd<()> {
+impl<'infcx,'a,'tcx> Builder<'infcx,'a,'tcx> {
+    pub fn simplify_candidate(&mut self,
+                              mut block: BasicBlock,
+                              candidate: &mut Candidate<'tcx>)
+                              -> BlockAnd<()> {
         // repeatedly simplify match pairs until fixed point is reached
         loop {
             let match_pairs = mem::replace(&mut candidate.match_pairs, vec![]);

@@ -216,7 +216,7 @@ impl<'ccx, 'tcx> CheckTypeWellFormedVisitor<'ccx, 'tcx> {
                 }
             }
 
-            let free_substs = &fcx.inh.infcx().parameter_environment.free_substs;
+            let free_substs = &fcx.infcx().parameter_environment.free_substs;
             let predicates = fcx.tcx().lookup_predicates(fcx.tcx().map.local_def_id(item.id));
             let predicates = fcx.instantiate_bounds(item.span, free_substs, &predicates);
             this.check_where_clauses(fcx, item.span, &predicates);
@@ -298,7 +298,7 @@ impl<'ccx, 'tcx> CheckTypeWellFormedVisitor<'ccx, 'tcx> {
         debug!("check_impl: {:?}", item);
 
         self.with_item_fcx(item, |fcx, this| {
-            let free_substs = &fcx.inh.infcx().parameter_environment.free_substs.clone();
+            let free_substs = &fcx.infcx().parameter_environment.free_substs.clone();
             let item_def_id = fcx.tcx().map.local_def_id(item.id);
 
             match *ast_trait_ref {
@@ -310,7 +310,7 @@ impl<'ccx, 'tcx> CheckTypeWellFormedVisitor<'ccx, 'tcx> {
                             &free_substs,
                             &trait_ref);
                     let obligations =
-                        wf::trait_obligations(&mut fcx.infcx(),
+                        ty::wf::trait_obligations(&mut fcx.infcx(),
                                               fcx.body_id,
                                               &trait_ref,
                                                   &trait_ref,
@@ -342,7 +342,7 @@ impl<'ccx, 'tcx> CheckTypeWellFormedVisitor<'ccx, 'tcx> {
         let obligations =
             predicates.predicates
                       .iter()
-                      .flat_map(|p| wf::predicate_obligations(&mut fcx.infcx(),
+                      .flat_map(|p| ty::wf::predicate_obligations(&mut fcx.infcx(),
                                                               fcx.body_id,
                                                               p,
                                                        

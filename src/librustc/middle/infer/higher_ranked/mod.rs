@@ -17,6 +17,7 @@ use super::combine::CombineFields;
 use middle::ty::{self, Binder, TypeFoldable};
 use middle::subst;
 use middle::transactional::TransactionalMut;
+use middle::ty::{self, Binder};
 use middle::ty::error::TypeError;
 use middle::ty::relate::{Relate, RelateResult, TypeRelation};
 use syntax::codemap::Span;
