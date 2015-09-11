@@ -244,7 +244,7 @@ pub trait ErrorReporting<'tcx> {
                                          terr: &TypeError<'tcx>,
                                          sp: Span);
 
-    fn report_and_explain_type_error(&self,
+    fn report_and_explain_type_error(&mut self,
                                      trace: TypeTrace<'tcx>,
                                      terr: &TypeError<'tcx>);
 
@@ -576,7 +576,7 @@ impl<'a, 'tcx> ErrorReporting<'tcx> for InferCtxt<'a, 'tcx> {
     }
 
     fn expected_found_str<T: fmt::Display + Resolvable<'tcx> + HasTypeFlags>(
-        &self,
+        &mut self,
         exp_found: &ty::error::ExpectedFound<T>)
         -> Option<String>
     {

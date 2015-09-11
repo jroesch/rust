@@ -30,13 +30,14 @@ use middle::subst::Subst;
 use middle::traits::{self, CodeAmbiguity, CodeSelectionError, CodeProjectionError,
                      Normalized, SelectionContext, ObligationCause,
                      ObligationCauseCode, PredicateObligation,
-                     PredicateObligation, Unimplemented, FulfillmentError, RFC1214Warning};
+                     Unimplemented, FulfillmentError, RFC1214Warning, TraitErrorKey};
 use middle::ty::adjustment;
 use middle::traits::project;
+use middle::traits::is_object_safe;
 use middle::traits::util::{predicate_for_builtin_bound};
 use middle::transactional::TransactionalMut;
 use middle::ty::{TyVid, IntVid, FloatVid, RegionVid};
-use middle::ty::{self, Ty, HasTypeFlags};
+use middle::ty::{self, Ty, HasTypeFlags, RegionEscape};
 use middle::ty::error::{ExpectedFound, TypeError, UnconstrainedNumeric};
 use middle::ty::fold::{TypeFolder, TypeFoldable};
 use middle::ty::relate::{Relate, RelateResult, TypeRelation};
@@ -112,6 +113,8 @@ pub struct InferCtxt<'a, 'tcx: 'a> {
     normalize: bool,
 
     err_count_on_creation: usize,
+
+    pub reported_trait_errors: RefCell<FnvHashSet<TraitErrorKey<'tcx>>>,
 
     /// The fulfillment context is used to drive trait resolution.  It
     /// consists of a list of obligations that must be (eventually)
@@ -607,25 +610,7 @@ pub fn normalize_associated_type<'tcx,T>(tcx: &ty::ctxt<'tcx>, value: &T) -> T
 
     let result = infcx.drain_fulfillment_cx_or_panic(&result, DUMMY_SP);
 
-    drain_fulfillment_cx_or_panic(DUMMY_SP, &infcx, &mut fulfill_cx, &result)
-}
-
-pub fn drain_fulfillment_cx_or_panic<'a,'tcx,T>(span: Span,
-                                                infcx: &InferCtxt<'a,'tcx>,
-                                                fulfill_cx: &mut traits::FulfillmentContext<'tcx>,
-                                                result: &T)
-                                                -> T
-    where T : TypeFoldable<'tcx> + HasTypeFlags
-{
-    match drain_fulfillment_cx(infcx, fulfill_cx, result) {
-        Ok(v) => v,
-        Err(errors) => {
-            infcx.tcx.sess.span_bug(
-                span,
-                &format!("Encountered errors `{:?}` fulfilling during trans",
-                         errors));
-        }
-    }
+    result
 }
 
 impl<'a, 'tcx> InferCtxt<'a, 'tcx> {
@@ -670,6 +655,7 @@ impl<'a, 'tcx> InferCtxt<'a, 'tcx> {
             attempted_mark: 0,
             region_obligations: NodeMap(),
             errors_will_be_reported: errors_will_be_reported,
+            reported_trait_errors: RefCell::new(FnvHashSet()),
         }
     }
 
@@ -992,27 +978,6 @@ impl<'a, 'tcx> InferCtxt<'a, 'tcx> {
 
         self.duplicate_set = duplicate_set;
 
-        r
-    }
-
-    /// Execute `f` then unroll any bindings it creates
-    pub fn probe<R, F>(&mut self, f: F) -> R where
-        F: FnOnce(&CombinedSnapshot) -> R,
-    {
-        debug!("probe()");
-        let snapshot = self.start_snapshot();
-        let r = f(&snapshot);
-        self.rollback_to("probe", snapshot);
-        r
-    }
-
-    pub fn probe_with_infer_ctxt<R, F>(&mut self, f: F) -> R where
-        F: FnOnce(&CombinedSnapshot, &mut InferCtxt<'a, 'tcx>) -> R,
-    {
-        debug!("probe_with_selection_context()");
-        let snapshot = self.start_snapshot();
-        let r = f(&snapshot, self);
-        self.rollback_to(snapshot);
         r
     }
 
@@ -1675,8 +1640,7 @@ impl<'a, 'tcx> InferCtxt<'a, 'tcx> {
             .get(&method_call)
             .map(|method| method.def_id)
     }
-    pub fn adjustments(&self) -> Ref<NodeMap<ty::AutoAdjustment<'tcx>>> {
-
+    pub fn adjustments(&self) -> Ref<NodeMap<adjustment::AutoAdjustment<'tcx>>> {
         Ref::map(self.tables.borrow(), |tables| &tables.adjustments)
     }
 
@@ -2178,8 +2142,8 @@ fn process_predicate<'cell, 'infcx, 'cx, 'tcx>(selcx: &mut SelectionContext<'cel
                 ObligationCauseCode::RFC1214(_) => true,
                 _ => false,
             };
-            match wf::obligations(&mut selcx.infcx(), obligation.cause.body_id,
-                                  ty, obligation.cause.span, rfc1214) {
+            match ty::wf::obligations(&mut selcx.infcx(), obligation.cause.body_id,
+                                      ty, obligation.cause.span, rfc1214) {
                 Some(obligations) => {
                     new_obligations.extend(obligations);
                     true
@@ -2361,14 +2325,6 @@ pub struct RegionObligation<'tcx> {
     pub sub_region: ty::Region,
     pub sup_type: Ty<'tcx>,
     pub cause: ObligationCause<'tcx>,
-}
-
-impl<'tcx> fmt::Debug for RegionObligation<'tcx> {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "RegionObligation(sub_region={:?}, sup_type={:?})",
-               self.sub_region,
-               self.sup_type)
-    }
 }
 
 impl<'tcx> FulfilledPredicates<'tcx> {

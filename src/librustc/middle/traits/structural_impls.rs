@@ -8,6 +8,7 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
+use middle::infer;
 use middle::traits;
 use middle::traits::project::Normalized;
 use middle::ty::{HasTypeFlags, TypeFlags, RegionEscape};
@@ -25,7 +26,7 @@ impl<'tcx, T: fmt::Debug> fmt::Debug for Normalized<'tcx, T> {
     }
 }
 
-impl<'tcx> fmt::Debug for traits::RegionObligation<'tcx> {
+impl<'tcx> fmt::Debug for infer::RegionObligation<'tcx> {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "RegionObligation(sub_region={:?}, sup_type={:?})",
                self.sub_region,

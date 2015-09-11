@@ -20,6 +20,7 @@ use middle;
 use middle::cstore::CrateStore;
 use middle::def::DefMap;
 use middle::def_id::DefId;
+use middle::infer;
 use middle::free_region::FreeRegionMap;
 use middle::region::RegionMaps;
 use middle::resolve_lifetime;
@@ -341,7 +342,7 @@ pub struct ctxt<'tcx> {
     /// This is used to avoid duplicate work. Predicates are only
     /// added to this set when they mention only "global" names
     /// (i.e., no type or lifetime parameters).
-    pub fulfilled_predicates: RefCell<traits::FulfilledPredicates<'tcx>>,
+    pub fulfilled_predicates: RefCell<infer::FulfilledPredicates<'tcx>>,
 
     /// Caches the representation hints for struct definitions.
     pub repr_hint_cache: RefCell<DefIdMap<Rc<Vec<attr::ReprAttr>>>>,
@@ -505,7 +506,7 @@ impl<'tcx> ctxt<'tcx> {
             adt_defs: RefCell::new(DefIdMap()),
             predicates: RefCell::new(DefIdMap()),
             super_predicates: RefCell::new(DefIdMap()),
-            fulfilled_predicates: RefCell::new(traits::FulfilledPredicates::new()),
+            fulfilled_predicates: RefCell::new(infer::FulfilledPredicates::new()),
             map: map,
             freevars: RefCell::new(freevars),
             tcache: RefCell::new(DefIdMap()),

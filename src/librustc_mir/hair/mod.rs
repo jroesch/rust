@@ -359,13 +359,13 @@ pub struct FieldPattern<'tcx> {
 pub trait Mirror<'tcx> {
     type Output;
 
-    fn make_mirror<'a>(self, cx: &mut Cx<'a, 'tcx>) -> Self::Output;
+    fn make_mirror<'infcx, 'a>(self, cx: &mut Cx<'infcx, 'a, 'tcx>) -> Self::Output;
 }
 
 impl<'tcx> Mirror<'tcx> for Expr<'tcx> {
     type Output = Expr<'tcx>;
 
-    fn make_mirror<'a>(self, _: &mut Cx<'a, 'tcx>) -> Expr<'tcx> {
+    fn make_mirror<'infcx,'a>(self, _: &mut Cx<'infcx, 'a, 'tcx>) -> Expr<'tcx> {
         self
     }
 }
@@ -373,7 +373,7 @@ impl<'tcx> Mirror<'tcx> for Expr<'tcx> {
 impl<'tcx> Mirror<'tcx> for ExprRef<'tcx> {
     type Output = Expr<'tcx>;
 
-    fn make_mirror<'a>(self, hir: &mut Cx<'a, 'tcx>) -> Expr<'tcx> {
+    fn make_mirror<'infcx,'a>(self, hir: &mut Cx<'infcx, 'a, 'tcx>) -> Expr<'tcx> {
         match self {
             ExprRef::Hair(h) => h.make_mirror(hir),
             ExprRef::Mirror(m) => *m,
@@ -384,7 +384,7 @@ impl<'tcx> Mirror<'tcx> for ExprRef<'tcx> {
 impl<'tcx> Mirror<'tcx> for Stmt<'tcx> {
     type Output = Stmt<'tcx>;
 
-    fn make_mirror<'a>(self, _: &mut Cx<'a, 'tcx>) -> Stmt<'tcx> {
+    fn make_mirror<'infcx,'a>(self, _: &mut Cx<'infcx, 'a, 'tcx>) -> Stmt<'tcx> {
         self
     }
 }
@@ -392,7 +392,7 @@ impl<'tcx> Mirror<'tcx> for Stmt<'tcx> {
 impl<'tcx> Mirror<'tcx> for StmtRef<'tcx> {
     type Output = Stmt<'tcx>;
 
-    fn make_mirror<'a>(self, _: &mut Cx<'a,'tcx>) -> Stmt<'tcx> {
+    fn make_mirror<'infcx,'a>(self, hir: &mut Cx<'infcx, 'a, 'tcx>) -> Stmt<'tcx> {
         match self {
             StmtRef::Mirror(m) => *m,
         }
@@ -402,7 +402,7 @@ impl<'tcx> Mirror<'tcx> for StmtRef<'tcx> {
 impl<'tcx> Mirror<'tcx> for Block<'tcx> {
     type Output = Block<'tcx>;
 
-    fn make_mirror<'a>(self, _: &mut Cx<'a, 'tcx>) -> Block<'tcx> {
+    fn make_mirror<'infcx,'a>(self, _: &mut Cx<'infcx, 'a, 'tcx>) -> Block<'tcx> {
         self
     }
 }

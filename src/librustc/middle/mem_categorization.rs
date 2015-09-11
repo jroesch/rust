@@ -451,7 +451,7 @@ impl<'cell, 'cx, 'tcx> MemCategorizationContext<'cell, 'cx, 'tcx> {
             }
 
             Some(adjustment) => {
-                match *adjustment {
+                match adjustment {
                     adjustment::AdjustDerefRef(
                         adjustment::AutoDerefRef {
                             autoref: None, unsize: None, autoderefs, ..}) => {
@@ -1175,7 +1175,7 @@ impl<'cell, 'cx, 'tcx> MemCategorizationContext<'cell, 'cx, 'tcx> {
         ret
     }
 
-    pub fn cat_pattern<F>(&self, cmt: cmt<'tcx>, pat: &ast::Pat, mut op: F) -> McResult<()>
+    pub fn cat_pattern<F>(&self, cmt: cmt<'tcx>, pat: &hir::Pat, mut op: F) -> McResult<()>
         where F: FnMut(&MemCategorizationContext<'cell, 'cx, 'tcx>, cmt<'tcx>, &hir::Pat),
     {
         self.cat_pattern_(cmt, pat, &mut op)

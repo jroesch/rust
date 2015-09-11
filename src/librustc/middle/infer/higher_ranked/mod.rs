@@ -15,6 +15,7 @@ use super::{CombinedSnapshot, InferCtxt, HigherRankedType, SkolemizationMap};
 use super::combine::CombineFields;
 
 use middle::transactional::TransactionalMut;
+use middle::ty::{self, Binder};
 use middle::ty::error::TypeError;
 use middle::ty::fold::TypeFoldable;
 use middle::ty::relate::{Relate, RelateResult, TypeRelation};

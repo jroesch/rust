@@ -19,6 +19,7 @@ use middle::subst::{ErasedRegions, NonerasedRegions, ParamSpace, Substs};
 use middle::ty::{self, HasTypeFlags, Ty};
 use middle::ty::error::{ExpectedFound, TypeError};
 use middle::ty::fold::TypeFoldable;
+use std::cell::RefMut;
 use std::rc::Rc;
 use syntax::abi;
 use rustc_front::hir as ast;
@@ -671,7 +672,7 @@ pub fn expected_found<'infcx,'a,'tcx:'a,R,T>(relation: &mut R,
                                       a: &T,
                                       b: &T)
                                       -> ExpectedFound<T>
-    where R: TypeRelation<'a,'tcx>, T: Clone
+    where R: TypeRelation<'infcx,'a,'tcx>, T: Clone
 {
     expected_found_bool(relation.a_is_expected(), a, b)
 }
