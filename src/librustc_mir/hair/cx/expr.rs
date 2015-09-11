@@ -27,7 +27,7 @@ use syntax::ptr::P;
 impl<'tcx> Mirror<'tcx> for &'tcx hir::Expr {
     type Output = Expr<'tcx>;
 
-    fn make_mirror<'a>(self, cx: &mut Cx<'a, 'tcx>) -> Expr<'tcx> {
+    fn make_mirror<'infcx, 'a>(self, cx: &mut Cx<'infcx, 'a, 'tcx>) -> Expr<'tcx> {
         debug!("Expr::make_mirror(): id={}, span={:?}", self.id, self.span);
 
         let expr_ty = cx.tcx.expr_ty(self); // note: no adjustments (yet)!
@@ -468,10 +468,10 @@ impl<'tcx> Mirror<'tcx> for &'tcx hir::Expr {
     }
 }
 
-fn method_callee<'a, 'tcx: 'a>(cx: &mut Cx<'a, 'tcx>,
-                               expr: &hir::Expr,
-                               method_call: ty::MethodCall)
-                               -> Expr<'tcx> {
+fn method_callee<'infcx, 'a: 'infcx,'tcx:'a>(cx: &mut Cx<'infcx, 'a, 'tcx>,
+                             expr: &hir::Expr,
+                             method_call: ty::MethodCall)
+                             -> Expr<'tcx> {
     let tables = cx.tcx.tables.borrow();
     let callee = &tables.method_map[&method_call];
     let temp_lifetime = cx.tcx.region_maps.temporary_scope(expr.id);
@@ -496,7 +496,7 @@ fn to_borrow_kind(m: hir::Mutability) -> BorrowKind {
     }
 }
 
-fn convert_arm<'a, 'tcx: 'a>(cx: &mut Cx<'a, 'tcx>, arm: &'tcx hir::Arm) -> Arm<'tcx> {
+fn convert_arm<'infcx, 'a: 'infcx,'tcx:'a>(cx: &Cx<'infcx, 'a, 'tcx>, arm: &'tcx hir::Arm) -> Arm<'tcx> {
     let mut map;
     let opt_map = if arm.pats.len() == 1 {
         None
@@ -515,7 +515,7 @@ fn convert_arm<'a, 'tcx: 'a>(cx: &mut Cx<'a, 'tcx>, arm: &'tcx hir::Arm) -> Arm<
     }
 }
 
-fn convert_path_expr<'a, 'tcx: 'a>(cx: &mut Cx<'a, 'tcx>, expr: &'tcx hir::Expr) -> ExprKind<'tcx> {
+fn convert_path_expr<'infcx, 'a, 'tcx: 'a>(cx: &mut Cx<'infcx, 'a, 'tcx>, expr: &'tcx hir::Expr) -> ExprKind<'tcx> {
     let substs = cx.tcx.mk_substs(cx.tcx.node_id_item_substs(expr.id).substs);
     // Otherwise there may be def_map borrow conflicts
     let def = cx.tcx.def_map.borrow()[&expr.id].full_def();
@@ -567,10 +567,10 @@ fn convert_path_expr<'a, 'tcx: 'a>(cx: &mut Cx<'a, 'tcx>, expr: &'tcx hir::Expr)
     }
 }
 
-fn convert_var<'a, 'tcx: 'a>(cx: &mut Cx<'a, 'tcx>,
-                             expr: &'tcx hir::Expr,
-                             def: def::Def)
-                             -> ExprKind<'tcx> {
+fn convert_var<'infcx, 'a: 'infcx,'tcx:'a>(cx: &mut Cx<'infcx, 'a, 'tcx>,
+                           expr: &'tcx hir::Expr,
+                           def: def::Def)
+                           -> ExprKind<'tcx> {
     let temp_lifetime = cx.tcx.region_maps.temporary_scope(expr.id);
 
     match def {
@@ -726,13 +726,13 @@ enum PassArgs {
     ByRef,
 }
 
-fn overloaded_operator<'a, 'tcx: 'a>(cx: &mut Cx<'a, 'tcx>,
-                                     expr: &'tcx hir::Expr,
-                                     method_call: ty::MethodCall,
-                                     pass_args: PassArgs,
-                                     receiver: ExprRef<'tcx>,
-                                     args: Vec<&'tcx P<hir::Expr>>)
-                                     -> ExprKind<'tcx> {
+fn overloaded_operator<'infcx, 'a: 'infcx,'tcx:'a>(cx: &mut Cx<'infcx, 'a, 'tcx>,
+                                   expr: &'tcx hir::Expr,
+                                   method_call: ty::MethodCall,
+                                   pass_args: PassArgs,
+                                   receiver: ExprRef<'tcx>,
+                                   args: Vec<&'tcx P<hir::Expr>>)
+                                   -> ExprKind<'tcx> {
     // the receiver has all the adjustments that are needed, so we can
     // just push a reference to it
     let mut argrefs = vec![receiver];
@@ -776,13 +776,13 @@ fn overloaded_operator<'a, 'tcx: 'a>(cx: &mut Cx<'a, 'tcx>,
     }
 }
 
-fn overloaded_lvalue<'a, 'tcx: 'a>(cx: &mut Cx<'a, 'tcx>,
-                                   expr: &'tcx hir::Expr,
-                                   method_call: ty::MethodCall,
-                                   pass_args: PassArgs,
-                                   receiver: ExprRef<'tcx>,
-                                   args: Vec<&'tcx P<hir::Expr>>)
-                                   -> ExprKind<'tcx> {
+fn overloaded_lvalue<'infcx, 'a: 'infcx,'tcx:'a>(cx: &mut Cx<'infcx, 'a, 'tcx>,
+                                 expr: &'tcx hir::Expr,
+                                 method_call: ty::MethodCall,
+                                 pass_args: PassArgs,
+                                 receiver: ExprRef<'tcx>,
+                                 args: Vec<&'tcx P<hir::Expr>>)
+                                 -> ExprKind<'tcx> {
     // For an overloaded *x or x[y] expression of type T, the method
     // call returns an &T and we must add the deref so that the types
     // line up (this is because `*x` and `x[y]` represent lvalues):
@@ -811,11 +811,11 @@ fn overloaded_lvalue<'a, 'tcx: 'a>(cx: &mut Cx<'a, 'tcx>,
     ExprKind::Deref { arg: ref_expr.to_ref() }
 }
 
-fn capture_freevar<'a, 'tcx: 'a>(cx: &mut Cx<'a, 'tcx>,
-                                 closure_expr: &'tcx hir::Expr,
-                                 freevar: &ty::Freevar,
-                                 freevar_ty: Ty<'tcx>)
-                                 -> ExprRef<'tcx> {
+fn capture_freevar<'infcx, 'a: 'infcx,'tcx:'a>(cx: &mut Cx<'infcx, 'a, 'tcx>,
+                               closure_expr: &'tcx hir::Expr,
+                               freevar: &ty::Freevar,
+                               freevar_ty: Ty<'tcx>)
+                               -> ExprRef<'tcx> {
     let id_var = freevar.def.var_id();
     let upvar_id = ty::UpvarId {
         var_id: id_var,
@@ -852,7 +852,7 @@ fn capture_freevar<'a, 'tcx: 'a>(cx: &mut Cx<'a, 'tcx>,
     }
 }
 
-fn loop_label<'a, 'tcx: 'a>(cx: &mut Cx<'a, 'tcx>, expr: &'tcx hir::Expr) -> CodeExtent {
+fn loop_label<'infcx, 'a, 'tcx: 'a>(cx: &mut Cx<'infcx, 'a, 'tcx>, expr: &'tcx hir::Expr) -> CodeExtent {
     match cx.tcx.def_map.borrow().get(&expr.id).map(|d| d.full_def()) {
         Some(def::DefLabel(loop_id)) => cx.tcx.region_maps.node_extent(loop_id),
         d => {

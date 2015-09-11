@@ -18,7 +18,7 @@ use rustc::middle::region::CodeExtent;
 use rustc::mir::repr::*;
 use syntax::codemap::Span;
 
-impl<'a,'tcx> Builder<'a,'tcx> {
+impl<'infcx,'a,'tcx> Builder<'infcx,'a,'tcx> {
     /// Compile `expr`, storing the result into `destination`, which
     /// is assumed to be uninitialized.
     pub fn into_expr(&mut self,

@@ -13,7 +13,7 @@ use hair::*;
 use rustc::mir::repr::*;
 use rustc_front::hir;
 
-impl<'a,'tcx> Builder<'a,'tcx> {
+impl<'infcx,'a,'tcx> Builder<'infcx, 'a,'tcx> {
     pub fn ast_block(&mut self,
                      destination: &Lvalue<'tcx>,
                      mut block: BasicBlock,

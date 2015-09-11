@@ -1281,7 +1281,7 @@ fn associated_path_def_to_ty<'tcx>(this: &AstConv<'tcx>,
             // trait reference.
             let trait_ref = tcx.impl_trait_ref(tcx.map.local_def_id(impl_id)).unwrap();
             let trait_ref = if let Some(free_substs) = this.get_free_substs() {
-                trait_ref.subst(tcx, free_substs)
+                trait_ref.subst(tcx, &free_substs)
             } else {
                 trait_ref
             };

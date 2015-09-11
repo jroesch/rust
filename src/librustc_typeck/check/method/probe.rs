@@ -254,7 +254,7 @@ impl<'fcx, 'a, 'tcx> ProbeContext<'fcx, 'a,'tcx> {
            item_name: ast::Name,
            steps: Vec<CandidateStep<'tcx>>,
            opt_simplified_steps: Option<Vec<ty::fast_reject::SimplifiedType>>)
-           -> ProbeContext<'a,'tcx>
+           -> ProbeContext<'fcx,'a,'tcx>
     {
         ProbeContext {
             fcx: fcx,

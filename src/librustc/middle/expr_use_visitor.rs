@@ -279,10 +279,13 @@ impl<'d,'cell,'cx,'tcx> ExprUseVisitor<'d, 'cell, 'cx, 'tcx> {
     pub fn new(delegate: &'d mut Delegate<'tcx>,
                typer: &'cell RefCell<infer::InferCtxt<'cx, 'tcx>>)
                -> ExprUseVisitor<'d, 'cell, 'cx, 'tcx> {
-        ExprUseVisitor {
+        let result = ExprUseVisitor {
             typer: typer,
             mc: mc::MemCategorizationContext::new(typer),
             delegate: delegate,
+        };
+
+        result
     }
 
     pub fn walk_fn(&mut self,
@@ -677,14 +680,13 @@ impl<'d,'cell,'cx,'tcx> ExprUseVisitor<'d, 'cell, 'cx, 'tcx> {
         // expression that will actually be used
         if let ty::TyStruct(def, substs) = with_cmt.ty.sty {
             // Consume those fields of the with expression that are needed.
-            }
             for with_field in &def.struct_variant().fields {
                 if !contains_field_named(with_field, fields) {
                     let cmt_field = self.mc.cat_field(
                         &*with_expr,
                         with_cmt.clone(),
                         with_field.name,
-                        with_field.ty(self.tcx(), substs)
+                        with_field.ty(&self.tcx(), substs)
                     );
                     self.delegate_consume(with_expr.id, with_expr.span, cmt_field);
                 }
@@ -724,7 +726,7 @@ impl<'d,'cell,'cx,'tcx> ExprUseVisitor<'d, 'cell, 'cx, 'tcx> {
             let result = typer.adjustments().get(&expr.id).map(|x| x.clone());
             result
         };
-        
+
         if let Some(adjustment) = adj {
             match adjustment {
                 adjustment::AdjustReifyFnPointer |
@@ -1210,7 +1212,7 @@ impl<'d,'cell,'cx,'tcx> ExprUseVisitor<'d, 'cell, 'cx, 'tcx> {
         // Create the cmt for the variable being borrowed, from the
         // caller's perspective
         let var_id = upvar_def.var_id();
-        let var_ty = try!(self.typer.borrow().node_ty(var_id));
+        let var_ty = try!(self.typer.borrow_mut().node_ty(var_id));
         self.mc.cat_def(closure_id, closure_span, var_ty, upvar_def)
     }
 }

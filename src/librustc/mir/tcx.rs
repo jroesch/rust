@@ -17,6 +17,7 @@ use mir::repr::*;
 use middle::subst::Substs;
 use middle::ty::{self, AdtDef, Ty};
 use rustc_front::hir;
+use std::cell::RefCell;
 
 #[derive(Copy, Clone, Debug)]
 pub enum LvalueTy<'tcx> {
@@ -28,6 +29,22 @@ pub enum LvalueTy<'tcx> {
                substs: &'tcx Substs<'tcx>,
                variant_index: usize },
 }
+
+pub use self::pattern::PatNode;
+
+impl<'infcx, 'a: 'infcx,'tcx:'a> Cx<'infcx,'a, 'tcx> {
+    /// Normalizes `ast` into the appropriate `mirror` type.
+    pub fn mirror<M: Mirror<'tcx>>(&mut self, ast: M) -> M::Output {
+        ast.make_mirror(self)
+    }
+
+    pub fn unit_ty(&mut self) -> Ty<'tcx> {
+        self.tcx.mk_nil()
+    }
+
+    pub fn usize_ty(&mut self) -> Ty<'tcx> {
+        self.tcx.types.usize
+    }
 
 impl<'tcx> LvalueTy<'tcx> {
     pub fn from_ty(ty: Ty<'tcx>) -> LvalueTy<'tcx> {

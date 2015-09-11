@@ -29,7 +29,6 @@ use middle::ty::fold::{TypeFoldable, TypeFolder};
 use syntax::parse::token;
 use util::common::FN_OUTPUT_NAME;
 
-use std::fmt;
 use std::cell::RefCell;
 
 pub type PolyProjectionObligation<'tcx> =
