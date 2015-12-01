@@ -74,7 +74,19 @@ impl<T> SnapshotTree<T> {
     }
 
     pub fn insert_child(&mut self, parent: u32, elem: T) -> u32 {
-        panic!()
+        match parent.child {
+            None => {}
+            Some(child) => {
+                let mut opt_sibling = child.sibling;
+                loop {
+                    
+                }
+        }
+        // We only fall through if there is no traversal to be done.
+        parent.child = 
+        while let Some(child_index) = opt_child {
+            opt_child self.vec[child_index].child
+        }
     }
 
     pub fn len(&self) -> usize {
