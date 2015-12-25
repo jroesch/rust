@@ -656,7 +656,7 @@ fn assemble_candidates_from_predicates<'r, 'a, 'cx, 'tcx, I>(
                 let same_name = data.item_name() == obligation.predicate.item_name;
 
                 let is_match = same_name && selcx.probe(|_,selcx| {
-                    let origin TypeOrigin::Misc(obligation.cause.span);
+                    let origin = TypeOrigin::Misc(obligation.cause.span);
                     let data_poly_trait_ref =
                         data.to_poly_trait_ref();
                     let obligation_poly_trait_ref =
@@ -913,7 +913,7 @@ fn confirm_param_env_candidate<'r, 'a,'cx,'tcx>(
     assert_eq!(projection.projection_ty.item_name,
                obligation.predicate.item_name);
 
-    let origin = infer::RelateOutputImplTypes(obligation.cause.span);
+    let origin = TypeOrigin::RelateOutputImplTypes(obligation.cause.span);
     match selcx.infcx().eq_trait_refs(false,
                                        origin,
                                        obligation.predicate.trait_ref.clone(),

@@ -262,10 +262,10 @@ impl<'cell, 'infcx, 'cx, 'tcx> SelectionContext<'cell, 'infcx, 'cx, 'tcx> {
             freshener: TypeFreshener::new(infcx),
             intercrate: false,
         }
-    // We can't correctly reason about the lifetimes of code inside of a local block,
-    // so I factored it into a helper method that allows the compiler to correctly
     }
 
+    // We can't correctly reason about the lifetimes of code inside of a local block,
+    // so I factored it into a helper method that allows the compiler to correctly
     // reason about the lifetime of the cell, and selcx.
     pub fn scoped<F, R>(infcx: &mut infer::InferCtxt<'cx, 'tcx>, body: F) -> R
         where F: for <'c, 'd> FnOnce(SelectionContext<'c, 'd, 'cx, 'tcx>) -> R {
@@ -289,9 +289,9 @@ impl<'cell, 'infcx, 'cx, 'tcx> SelectionContext<'cell, 'infcx, 'cx, 'tcx> {
 
     pub fn tcx(&self) -> &'cx ty::ctxt<'tcx> {
         self.infcx.borrow().tcx
-    pub fn param_env(&self) -> Ref<ty::ParameterEnvironment<'cx, 'tcx>> {
     }
 
+    pub fn param_env(&self) -> Ref<ty::ParameterEnvironment<'cx, 'tcx>> {
         Ref::map(self.infcx.borrow(), |infcx| infcx.param_env())
     }
 
@@ -436,7 +436,7 @@ impl<'cell, 'infcx, 'cx, 'tcx> SelectionContext<'cell, 'infcx, 'cx, 'tcx> {
                                                 stack: TraitObligationStackList<'o, 'tcx>,
                                                 predicates: I)
                                                 -> EvaluationResult
-        where I : Iterator<Item=&'a PredicateObligation<'tcx>>, 'tcx:'a
+        where I : Iterator<Item=&'b PredicateObligation<'tcx>>, 'tcx:'b
     {
         let mut result = EvaluatedToOk;
         for obligation in predicates {
@@ -649,7 +649,7 @@ impl<'cell, 'infcx, 'cx, 'tcx> SelectionContext<'cell, 'infcx, 'cx, 'tcx> {
     {
         debug!("evaluate_candidate: depth={} candidate={:?}",
                stack.obligation.recursion_depth, candidate);
-        self.probe(|snapshot, selcx| {
+        let result = self.probe(|snapshot, selcx| {
 
             let candidate = (*candidate).clone();
             match self.confirm_candidate(stack.obligation, candidate) {
@@ -2782,88 +2782,20 @@ impl<'cell, 'infcx, 'cx, 'tcx> SelectionContext<'cell, 'infcx, 'cx, 'tcx> {
 
     /// Returns `Ok` if `poly_trait_ref` being true implies that the
     /// obligation is satisfied.
-    fn match_poly_trait_ref(&mut self,
+    fn match_poly_trait_ref(&self,
                             obligation: &TraitObligation<'tcx>,
                             poly_trait_ref: ty::PolyTraitRef<'tcx>)
                             -> Result<(),()>
     {
-        debug!("match_poly_trait_ref: obligation={:?} poly_trait_ref={:?}",
-               obligation,
-               poly_trait_ref);
+            debug!("match_poly_trait_ref: obligation={:?} poly_trait_ref={:?}",
+                   obligation,
+                   poly_trait_ref);
 
-        let origin  TypeOrigin::RelateOutputImplTypes(obligation.cause.span);
-        match self.infcx().sub_poly_trait_refs(false,
+        let origin = TypeOrigin::RelateOutputImplTypes(obligation.cause.span);
+        match self.infcx.sub_poly_trait_refs(false,
                                              origin,
                                              poly_trait_ref,
                                              obligation.predicate.to_poly_trait_ref()) {
-            Ok(()) => Ok(()),
-            Err(_) => Err(()),
-        }
-    }
-
-    /// Determines whether the self type declared against
-    /// `impl_def_id` matches `obligation_self_ty`. If successful,
-    /// returns the substitutions used to make them match. See
-    /// `match_impl()`. For example, if `impl_def_id` is declared
-    /// as:
-    ///
-    ///    impl<T:Copy> Foo for Box<T> { ... }
-    ///
-    /// and `obligation_self_ty` is `int`, we'd get back an `Err(_)`
-    /// result. But if `obligation_self_ty` were `Box<int>`, we'd get
-    /// back `Ok(T=int)`.
-    fn match_inherent_impl(&mut self,
-                           impl_def_id: DefId,
-                           obligation_cause: &ObligationCause,
-                           obligation_self_ty: Ty<'tcx>)
-                           -> Result<Substs<'tcx>,()>
-    {
-        // Create fresh type variables for each type parameter declared
-        // on the impl etc.
-        let impl_substs = util::fresh_type_vars_for_impl(*self.infcx(),
-                                                         obligation_cause.span,
-                                                         impl_def_id);
-
-        // Find the self type for the impl.
-        let impl_self_ty = self.tcx().lookup_item_type(impl_def_id).ty;
-        let impl_self_ty = impl_self_ty.subst(self.tcx(), &impl_substs);
-
-        debug!("match_impl_self_types(obligation_self_ty={:?}, impl_self_ty={:?})",
-               obligation_self_ty,
-               impl_self_ty);
-
-        match self.match_self_types(obligation_cause,
-                                    impl_self_ty,
-                                    obligation_self_ty) {
-            Ok(()) => {
-                debug!("Matched impl_substs={:?}", impl_substs);
-                Ok(impl_substs)
-            }
-            Err(()) => {
-                debug!("NoMatch");
-                Err(())
-            }
-        }
-    }
-
-    fn match_self_types(&mut self,
-                        cause: &ObligationCause,
-
-                        // The self type provided by the impl/caller-obligation:
-                        provided_self_ty: Ty<'tcx>,
-
-                        // The self type the obligation is for:
-                        required_self_ty: Ty<'tcx>)
-                        -> Result<(),()>
-    {
-        // FIXME(#5781) -- equating the types is stronger than
-        // necessary. Should consider variance of trait w/r/t Self.
-
-        let origin = infer::RelateSelfType(cause.span);
-        match self.infcx().eq_types(false,
-                                  origin,
-                                  provided_self_ty,
-                                  required_self_ty) {
             Ok(()) => Ok(()),
             Err(_) => Err(()),
         }
