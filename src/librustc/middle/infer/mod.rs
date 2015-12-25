@@ -438,7 +438,7 @@ pub fn can_mk_subty<'a, 'tcx>(cx: &InferCtxt<'a, 'tcx>,
                               b: Ty<'tcx>)
                               -> UnitResult<'tcx> {
     debug!("can_mk_subty({:?} <: {:?})", a, b);
-    cx.probe(|_| {
+    cx.probe(|_, _| {
         let trace = TypeTrace {
             origin: TypeOrigin::Misc(codemap::DUMMY_SP),
             values: Types(expected_found(true, a, b))
@@ -483,7 +483,7 @@ pub fn mk_eq_trait_refs<'a, 'tcx>(cx: &InferCtxt<'a, 'tcx>,
 {
     debug!("mk_eq_trait_refs({:?} <: {:?})",
            a, b);
-    cx.commit_if_ok(|_| cx.eq_trait_refs(a_is_expected, origin, a.clone(), b.clone()))
+    cx.commit_if_ok(|_, _| cx.eq_trait_refs(a_is_expected, origin, a.clone(), b.clone()))
 }
 
 pub fn mk_sub_poly_trait_refs<'a, 'tcx>(cx: &InferCtxt<'a, 'tcx>,
@@ -652,7 +652,7 @@ impl<'a, 'tcx> InferCtxt<'a, 'tcx> {
         debug!("can_mk_subty({:?} <: {:?})", a, b);
         self.probe(|_, infer_ctxt| {
             let trace = TypeTrace {
-                origin: Misc(codemap::DUMMY_SP),
+                origin: TypeOrigin::Misc(codemap::DUMMY_SP),
                 values: Types(expected_found(true, a, b))
             };
             infer_ctxt.sub(true, trace).relate(&a, &b).map(|_| ())
