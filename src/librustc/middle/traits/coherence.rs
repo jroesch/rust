@@ -20,7 +20,6 @@ use super::util;
 use middle::cstore::LOCAL_CRATE;
 use middle::def_id::DefId;
 use middle::subst::{Subst, Substs, TypeSpace};
-use middle::ty::{self, Ty};
 use middle::transactional::TransactionalMut;
 use middle::ty::{self, ToPolyTraitRef, Ty};
 use middle::infer::{self, InferCtxt, TypeOrigin};
@@ -72,11 +71,9 @@ fn overlap<'cx, 'tcx>(selcx: &mut SelectionContext<'cx, 'tcx>,
     debug!("overlap: b_trait_ref={:?}", b_trait_ref);
 
     // Does `a <: b` hold? If not, no overlap.
-    if let Err(_) = selcx.infcx().mk_sub_poly_trait_refs(true, infer::Misc(DUMMY_SP),
-                                                         a_trait_ref.to_poly_trait_ref(),
-                                            TypeOrigin::Misc(DUMMY_SP),
+    if let Err(_) = selcx.infcx().mk_sub_poly_trait_refs(true, TypeOrigin::Misc(DUMMY_SP),
                                                          b_trait_ref.to_poly_trait_ref()) {
-                                            b_trait_ref) {
+                                           
         return None;
     }
 

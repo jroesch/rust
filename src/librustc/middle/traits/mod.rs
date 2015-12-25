@@ -357,8 +357,6 @@ pub fn type_known_to_meet_builtin_bound<'a,'tcx>(infcx: &mut InferCtxt<'a,'tcx>,
         // this function's result remains infallible, we must confirm
         // that guess. While imperfect, I believe this is sound.
 
-        let mut fulfill_cx = FulfillmentContext::new();
-
         // We can use a dummy node-id here because we won't pay any mind
         // to region obligations that arise (there shouldn't really be any
         // anyhow).
@@ -386,7 +384,7 @@ pub fn type_known_to_meet_builtin_bound<'a,'tcx>(infcx: &mut InferCtxt<'a,'tcx>,
                 false
             }
         }
-   })
+   }
 }
 
 // FIXME: this is gonna need to be removed ...
