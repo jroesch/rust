@@ -389,7 +389,7 @@ pub fn type_known_to_meet_builtin_bound<'a,'tcx>(infcx: &mut InferCtxt<'a,'tcx>,
                 false
             }
         }
-   })
+   }
 }
 
 // FIXME: this is gonna need to be removed ...
