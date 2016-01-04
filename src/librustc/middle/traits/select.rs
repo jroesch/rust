@@ -491,7 +491,7 @@ impl<'cell, 'infcx, 'cx, 'tcx> SelectionContext<'cell, 'infcx, 'cx, 'tcx> {
             ty::Predicate::WellFormed(ty) => {
                 match ty::wf::obligations(&mut self.infcx.borrow_mut(),
                                           obligation.cause.body_id,
-                                          ty, obligation.cause.span,
+                                          ty, obligation.cause.span) {
                     Some(obligations) =>
                         self.evaluate_predicates_recursively(previous_stack, obligations.iter()),
                     None =>

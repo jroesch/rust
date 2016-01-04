@@ -35,6 +35,7 @@ pub use self::error_reporting::report_object_safety_error;
 pub use self::coherence::orphan_check;
 pub use self::coherence::overlapping_impls;
 pub use self::coherence::OrphanCheckErr;
+pub use self::fulfill::{FulfillmentContext, FulfilledPredicates, RegionObligation};
 pub use self::project::MismatchedProjectionTypes;
 pub use self::project::normalize;
 pub use self::project::Normalized;
@@ -64,6 +65,7 @@ pub use util::common::ErrorReported;
 
 mod coherence;
 mod error_reporting;
+mod fulfill;
 mod object_safety;
 // Come back and fix privacy once compiling
 pub mod project;
@@ -497,13 +499,11 @@ pub fn fully_normalize<'a,'tcx,T>(infcx: &mut InferCtxt<'a,'tcx>,
                 project::normalize(&mut selcx, cause, value)
             });
 
-        debug!("normalize_param_env: normalized_value={:?} obligations={:?}",
+        debug!("fully_normalize: normalized_value={:?} obligations={:?}",
                normalized_value,
                obligations);
 
         for obligation in obligations {
-        project::normalize(selcx, cause, value);
-    debug!("fully_normalize: normalized_value={:?} obligations={:?}",
             infcx.register_predicate_obligation(obligation);
         }
 

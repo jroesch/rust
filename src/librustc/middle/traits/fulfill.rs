@@ -13,8 +13,6 @@ use middle::ty::{self, RegionEscape, Ty, HasTypeFlags};
 use rustc_data_structures::obligation_forest::{Backtrace, ObligationForest, Error};
 
 use syntax::ast;
-use rustc_data_structures::snapshot_vec::{SnapshotVec, SnapshotVecDelegate};
-use rustc_data_structures::snapshot_tree::{SnapshotTree};
 use util::common::ErrorReported;
 use util::nodemap::{FnvHashSet, NodeMap};
 
@@ -33,56 +31,6 @@ use super::util::predicate_for_builtin_bound;
 
 pub struct FulfilledPredicates<'tcx> {
     set: FnvHashSet<ty::Predicate<'tcx>>
-}
-
-
-impl<'tcx> SnapshotVecDelegate for PredicateObligation<'tcx> {
-    type Value = Self;
-    type Undo = ();
-
-    fn reverse(values: &mut Vec<PredicateObligation<'tcx>>, _action: ()) {
-        ()
-    }
-}
-
-impl<'tcx> SnapshotVecDelegate for RegionObligation<'tcx> {
-    type Value = Self;
-    type Undo = ();
-
-    fn reverse(values: &mut Vec<RegionObligation<'tcx>>, _action: ()) {
-        ()
-    }
-}
-
-// In the new fulfillment context model of using a tree, we will preseve the
-// entire proof tree for multiple reasons.
-//
-// In this case as we complete branches of work we will mark them as complete
-// in order to prevent recursing down them redoing work.
-//
-// This allows the fulfillment context to only track least upper bound of
-// all unfinished work in the tree. We can then only recurse down branches
-// that have not yet been completed.
-struct PendingPredicateObligation<'tcx> {
-    complete: bool,
-    pub obligation: PredicateObligation<'tcx>
-}
-
-impl<'tcx> PendingPredicateObligation<'tcx> {
-    pub fn new(obligation: PredicateObligation<'tcx>) -> PendingPredicateObligation<'tcx> {
-        PendingPredicateObligation {
-            complete: false,
-            obligation: obligation
-        }
-    }
-
-    pub fn complete(&mut self) {
-        self.complete = true
-    }
-
-    pub fn is_complete(&self) -> bool {
-        self.complete
-    }
 }
 
 /// The fulfillment context is used to drive trait resolution.  It
@@ -137,7 +85,7 @@ pub struct FulfillmentContext<'tcx> {
     // regionck to be sure that it has found *all* the region
     // obligations (otherwise, it's easy to fail to walk to a
     // particular node-id).
-    region_obligations: NodeMap<SnapshotVec<RegionObligation<'tcx>>>,
+    region_obligations: NodeMap<Vec<RegionObligation<'tcx>>>,
 }
 
 #[derive(Clone)]
@@ -258,7 +206,6 @@ impl<'tcx> FulfillmentContext<'tcx> {
         let errors: Vec<_> =
             self.predicates.to_errors(CodeAmbiguity)
                            .into_iter()
-            .filter(|p| !p.is_complete())
                            .map(|e| to_fulfillment_error(e))
                            .collect();
         if errors.is_empty() {
@@ -277,11 +224,7 @@ impl<'tcx> FulfillmentContext<'tcx> {
     }
 
     pub fn pending_obligations(&self) -> Vec<PendingPredicateObligation<'tcx>> {
-        self.predicates
         self.predicates.pending_obligations()
-            .filter(|n| !n.elem.is_complete())
-            .map(|n| &n.elem.obligation)
-            .collect()
     }
 
     fn is_duplicate_or_add(&mut self,
@@ -322,8 +265,6 @@ impl<'tcx> FulfillmentContext<'tcx> {
         let mut errors = Vec::new();
 
         loop {
-            let count = self.pending_obligations().len();
-
             debug!("select_where_possible: starting another iteration");
 
             // Process pending obligations.
@@ -337,13 +278,6 @@ impl<'tcx> FulfillmentContext<'tcx> {
             };
 
             debug!("select_where_possible: outcome={:?}", outcome);
-            // // then set `skip` to the number of obligations we've already
-            // // seen.
-            // let mut skip = if only_new_obligations {
-            //     self.attempted_mark
-            // } else {
-            //     0
-            // };
 
             // these are obligations that were proven to be true.
             for pending_obligation in outcome.successful {
@@ -552,7 +486,7 @@ fn process_predicate1<'a,'tcx>(selcx: &mut SelectionContext<'a,'tcx>,
 fn register_region_obligation<'tcx>(t_a: Ty<'tcx>,
                                     r_b: ty::Region,
                                     cause: ObligationCause<'tcx>,
-                                    region_obligations: &mut NodeMap<SnapshotVec<RegionObligation<'tcx>>>)
+                                    region_obligations: &mut NodeMap<Vec<RegionObligation<'tcx>>>)
 {
     let region_obligation = RegionObligation { sup_type: t_a,
                                                sub_region: r_b,
@@ -562,7 +496,7 @@ fn register_region_obligation<'tcx>(t_a: Ty<'tcx>,
            region_obligation, region_obligation.cause);
 
     region_obligations.entry(region_obligation.cause.body_id)
-                      .or_insert(SnapshotVec::new())
+                      .or_insert(vec![])
                       .push(region_obligation);
 
 }

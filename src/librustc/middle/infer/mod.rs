@@ -43,7 +43,6 @@ use middle::ty::fold::{TypeFolder, TypeFoldable};
 use middle::ty::relate::{Relate, RelateResult, TypeRelation};
 
 use rustc_data_structures::snapshot_vec::{Snapshot, SnapshotVec, SnapshotVecDelegate};
-use rustc_data_structures::snapshot_tree::{SnapshotTree};
 use rustc_data_structures::unify::{self, UnificationTable};
 use std::cell::{RefCell, Ref};
 use std::fmt;
@@ -101,6 +100,8 @@ pub struct InferCtxt<'a, 'tcx: 'a> {
 
     pub parameter_environment: ty::ParameterEnvironment<'a, 'tcx>,
 
+    pub fulfillment_cx: traits::FulfillmentContext<'tcx>,
+
     // the set of predicates on which errors have been reported, to
     // avoid reporting the same error twice.
     pub reported_trait_errors: RefCell<FnvHashSet<traits::TraitErrorKey<'tcx>>>,
@@ -113,63 +114,6 @@ pub struct InferCtxt<'a, 'tcx: 'a> {
     normalize: bool,
 
     err_count_on_creation: usize,
-
-    pub reported_trait_errors: RefCell<FnvHashSet<TraitErrorKey<'tcx>>>,
-
-    /// The fulfillment context is used to drive trait resolution.  It
-    /// consists of a list of obligations that must be (eventually)
-    /// satisfied. The job is to track which are satisfied, which yielded
-    /// errors, and which are still pending. At any point, users can call
-    /// `select_where_possible`, and the fulfilment context will try to do
-    /// selection, retaining only those obligations that remain
-    /// ambiguous. This may be helpful in pushing type inference
-    /// along. Once all type inference constraints have been generated, the
-    /// method `select_all_or_error` can be used to report any remaining
-    /// ambiguous cases as errors.
-
-    // a simple cache that aims to cache *exact duplicate obligations*
-    // and avoid adding them twice. This serves a different purpose
-    // than the `SelectionCache`: it avoids duplicate errors and
-    // permits recursive obligations, which are often generated from
-    // traits like `Send` et al.
-    pub duplicate_set: FulfilledPredicates<'tcx>,
-
-    // A list of all obligations that have been registered with this
-    // fulfillment context.
-    pub predicates: SnapshotTree<PendingPredicateObligation<'tcx>>,
-
-    // Remembers the count of trait obligations that we have already
-    // attempted to select. This is used to avoid repeating work
-    // when `select_new_obligations` is called.
-    pub attempted_mark: usize,
-
-    // A set of constraints that regionck must validate. Each
-    // constraint has the form `T:'a`, meaning "some type `T` must
-    // outlive the lifetime 'a". These constraints derive from
-    // instantiated type parameters. So if you had a struct defined
-    // like
-    //
-    //     struct Foo<T:'static> { ... }
-    //
-    // then in some expression `let x = Foo { ... }` it will
-    // instantiate the type parameter `T` with a fresh type `$0`. At
-    // the same time, it will record a region obligation of
-    // `$0:'static`. This will get checked later by regionck. (We
-    // can't generally check these things right away because we have
-    // to wait until types are resolved.)
-    //
-    // These are stored in a map keyed to the id of the innermost
-    // enclosing fn body / static initializer expression. This is
-    // because the location where the obligation was incurred can be
-    // relevant with respect to which sublifetime assumptions are in
-    // place. The reason that we store under the fn-id, and not
-    // something more fine-grained, is so that it is easier for
-    // regionck to be sure that it has found *all* the region
-    // obligations (otherwise, it's easy to fail to walk to a
-    // particular node-id).
-    pub region_obligations: NodeMap<SnapshotVec<RegionObligation<'tcx>>>,
-
-    pub errors_will_be_reported: bool,
 }
 
 pub trait HasInferCtxt<'a, 'tcx> {
