@@ -139,7 +139,7 @@ fn project_and_unify_type<'cx,'tcx>(
 
     let infcx = selcx.infcx();
     let origin = TypeOrigin::RelateOutputImplTypes(obligation.cause.span);
-    match infer::mk_eqty(infcx, true, origin, normalized_ty, obligation.predicate.ty) {
+    match infcx.mk_eqty(true, origin, normalized_ty, obligation.predicate.ty) {
         Ok(()) => Ok(Some(obligations)),
         Err(err) => Err(MismatchedProjectionTypes { err: err }),
     }
@@ -185,7 +185,7 @@ fn consider_unification_despite_ambiguity<'cx,'tcx>(selcx: &mut SelectionContext
                    ret_type);
             let origin = TypeOrigin::RelateOutputImplTypes(obligation.cause.span);
             let obligation_ty = obligation.predicate.ty;
-            match infer::mk_eqty(infcx, true, origin, obligation_ty, ret_type) {
+            match infcx.mk_eqty(true, origin, obligation_ty, ret_type) {
                 Ok(()) => { }
                 Err(_) => { /* ignore errors */ }
             }

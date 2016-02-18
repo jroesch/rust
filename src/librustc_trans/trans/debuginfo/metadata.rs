@@ -27,6 +27,7 @@ use middle::def_id::DefId;
 use middle::infer;
 use middle::pat_util;
 use middle::subst;
+use middle::infer::InferCtxt;
 use rustc::front::map as hir_map;
 use rustc_front::hir::{self, PatKind};
 use trans::{type_of, adt, machine, monomorphize};

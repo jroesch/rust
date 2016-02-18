@@ -21,6 +21,7 @@ use llvm::{True, False, Bool, OperandBundleDef};
 use middle::cfg;
 use middle::def::Def;
 use middle::def_id::DefId;
+use middle::infer::InferCtxt;
 use middle::infer;
 use middle::lang_items::LangItem;
 use middle::subst::{self, Substs};
@@ -1125,7 +1126,7 @@ pub fn fulfill_obligation<'a, 'tcx>(ccx: &CrateContext<'a, 'tcx>,
 
     // Do the initial selection for the obligation. This yields the
     // shallow result we are looking for -- that is, what specific impl.
-    let infcx = infer::normalizing_infer_ctxt(tcx, &tcx.tables);
+    let infcx = InferCtxt::normalizing(tcx, &tcx.tables);
     let mut selcx = traits::SelectionContext::new(&infcx);
 
     let obligation =
@@ -1163,7 +1164,7 @@ pub fn fulfill_obligation<'a, 'tcx>(ccx: &CrateContext<'a, 'tcx>,
     let vtable = selection.map(|predicate| {
         fulfill_cx.register_predicate_obligation(&infcx, predicate);
     });
-    let vtable = infer::drain_fulfillment_cx_or_panic(
+    let vtable = infcx.drain_fulfillment_cx_or_panic(
         span, &infcx, &mut fulfill_cx, &vtable
     );
 
@@ -1186,7 +1187,7 @@ pub fn normalize_and_test_predicates<'a, 'tcx>(ccx: &CrateContext<'a, 'tcx>,
            predicates);
 
     let tcx = ccx.tcx();
-    let infcx = infer::normalizing_infer_ctxt(tcx, &tcx.tables);
+    let infcx = InferCtxt::normalizing(tcx, &tcx.tables);
     let mut selcx = traits::SelectionContext::new(&infcx);
     let mut fulfill_cx = traits::FulfillmentContext::new();
     let cause = traits::ObligationCause::dummy();
@@ -1199,8 +1200,7 @@ pub fn normalize_and_test_predicates<'a, 'tcx>(ccx: &CrateContext<'a, 'tcx>,
         let obligation = traits::Obligation::new(cause.clone(), predicate);
         fulfill_cx.register_predicate_obligation(&infcx, obligation);
     }
-
-    infer::drain_fulfillment_cx(&infcx, &mut fulfill_cx, &()).is_ok()
+    infcx.drain_fulfillment_cx(&mut fulfill_cx, &()).is_ok()
 }
 
 // Key used to lookup values supplied for type parameters in an expr.
