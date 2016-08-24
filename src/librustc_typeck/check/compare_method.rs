@@ -21,7 +21,9 @@ use syntax_pos::Span;
 
 use CrateCtxt;
 use super::assoc;
+use super::FnCtxt;
 
+use std::cell::RefCell;
 /// Checks that a method from an impl conforms to the signature of
 /// the same method as declared in the trait.
 ///
@@ -303,7 +305,7 @@ pub fn compare_impl_method<'a, 'tcx>(ccx: &CrateCtxt<'a, 'tcx>,
         let impl_fty = tcx.mk_fn_ptr(tcx.mk_bare_fn(ty::BareFnTy {
             unsafety: impl_m.fty.unsafety,
             abi: impl_m.fty.abi,
-            sig: ty::Binder(impl_sig)
+            sig: ty::Binder(impl_sig.clone())
         }));
         debug!("compare_impl_method: impl_fty={:?}", impl_fty);
 
@@ -418,6 +420,22 @@ pub fn compare_impl_method<'a, 'tcx>(ccx: &CrateCtxt<'a, 'tcx>,
         if let Err(ref errors) = fulfillment_cx.select_all_or_error(&infcx) {
             infcx.report_fulfillment_errors(errors);
             return
+        }
+
+        if let Some(trait_m_node_id) = tcx.map.as_local_node_id(trait_m.def_id) {
+            ccx.inherited(trait_m_node_id).enter(|mut inh| {
+                // let mut inh = inh;
+                // This triggers a lifetime problem, because anything allocated
+                // in this scope violates the inferred region which outlives
+                // this current scope. Do I move this to the top-level?, it
+                // seems that modifications we make the param environment, would
+                // trigger a similar problem above. I am going to sleep on this,
+                // and try again when my brain is fully rested.
+                let flcx = fulfillment_cx;
+                inh.fulfillment_cx = RefCell::new(flcx);
+                let fcx = FnCtxt::new(&inh, impl_sig.output, 0);
+                println!("inside here");
+            });
         }
 
         // Finally, resolve all regions. This catches wily misuses of
